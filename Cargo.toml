@@ -1,0 +1,21 @@
+[package]
+name = "bufcli"
+version = "0.1.0"
+authors = ["Ryan <rnleach@users.noreply.github.com>"]
+edition = "2018"
+
+[dependencies]
+
+bufkit-data = "0.8.1"
+chrono = "0.4.2"
+clap = { version = "2.32.0", features = ["wrap_help"]}
+crossbeam-channel = "0.3.0"
+dirs = "1.0"
+itertools = "0.8"
+metfor = "0.7.0"
+pbr = "1.0.1"
+rusqlite = { version = "0.18", features = ["bundled", "chrono"], default-features = false }
+sounding-analysis = "0.11"
+sounding-bufkit = "0.11"
+threadpool = "1.7.1"
+strum = "0.15"
