@@ -3,10 +3,9 @@
 //! Generate ad hoc model climatologies from Bufkit soundings and store the intermediate data in the
 //! archive. These can be queried later by other tools to provide context to any given analysis.
 mod builder;
-mod climo_db;
 
 use self::builder::build_climo;
-use self::climo_db::ClimoDB;
+use bufcli::ClimoDB;
 use bufkit_data::{Archive, Model};
 use clap::{crate_version, App, Arg};
 use dirs::home_dir;

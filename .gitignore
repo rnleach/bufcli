@@ -1,4 +1,9 @@
 #
+# Project related.
+#
+*.txt
+
+#
 # Cargo related
 #
 target
@@ -10,6 +15,8 @@ Cargo.lock
 #
 *.sublime-*
 .vscode
+*.swp
+tags
 
 #
 # OS related

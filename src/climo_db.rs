@@ -1,7 +1,7 @@
+use crate::stats_record::StatsRecord;
 use bufkit_data::{Model, Site};
-use chrono::{Datelike, FixedOffset, NaiveDateTime, TimeZone, Timelike};
-use rusqlite::types::ToSql;
-use rusqlite::{Connection, OpenFlags, Statement, NO_PARAMS};
+use chrono::{Datelike, Duration, FixedOffset, NaiveDateTime, TimeZone, Timelike};
+use rusqlite::{params, types::ToSql, Connection, OpenFlags, Statement, NO_PARAMS};
 use std::{
     error::Error,
     fs::create_dir,
@@ -35,117 +35,15 @@ impl ClimoDB {
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
         )?;
 
-        //
-        //  Create the locations
-        //
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS locations (
-                site        TEXT NOT NULL,
-                model       TEXT NOT NULL,
-                start_date  TEXT NOT NULL,
-                latitude    NUM  NOT NULL,
-                longitude   NUM  NOT NULL,
-                elevation_m NUM  NOT NULL,
-                UNIQUE(site, model, latitude, longitude, elevation_m)
-            )",
-            NO_PARAMS,
-        )?;
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS locations_idx ON locations (site, model)",
-            NO_PARAMS,
-        )?;
-
-        //
-        // Create the the climate table
-        //
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS cli (
-                site         TEXT NOT NULL,
-                model        TEXT NOT NULL,
-
-                valid_time   TEXT NOT NULL,
-                year_lcl     INT  NOT NULL,
-                month_lcl    INT  NOT NULL,
-                day_lcl      INT  NOT NULL,
-                hour_lcl     INT  NOT NULL,
-
-                haines_high  INT,
-                haines_mid   INT,
-                haines_low   INT,
-                hdw          INT,
-                conv_t_def_c REAL,
-                dry_cape     INT,
-                wet_cape     INT,
-                cape_ratio   REAL,
-                ccl_agl_m    INT,
-                el_asl_m     INT,
-
-                mlcape       INT,
-                mlcin        INT,
-                dcape        INT,
-
-                ml_sfc_t_c   INT,
-                ml_sfc_rh    INT,
-                sfc_wspd_kt  INT,
-                sfc_wdir     INT,
-
-                PRIMARY KEY (site, valid_time, model, year_lcl, month_lcl, day_lcl, hour_lcl)
-            )",
-            NO_PARAMS,
-        )?;
-
-        conn.execute("PRAGMA cache_size=100000", NO_PARAMS)?;
+        // Create the database if it doesn't exist.
+        conn.execute_batch(include_str!("sql/create.sql"))?;
 
         Ok(ClimoDB { conn })
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum StatsRecord {
-    CliData {
-        site: Site,
-        model: Model,
-        valid_time: NaiveDateTime,
-
-        hns_high: i32,
-        hns_mid: i32,
-        hns_low: i32,
-        hdw: i32,
-        conv_t_def: Option<f64>,
-        dry_cape: Option<i32>,
-        wet_cape: Option<i32>,
-        cape_ratio: Option<f64>,
-        ccl_agl_m: Option<i32>,
-        el_asl_m: Option<i32>,
-
-        mlcape: Option<i32>,
-        mlcin: Option<i32>,
-        dcape: Option<i32>,
-
-        ml_sfc_t: Option<i32>,
-        ml_sfc_rh: Option<i32>,
-        sfc_wspd_kt: Option<i32>,
-        sfc_wdir: Option<i32>,
-    },
-    Location {
-        site: Site,
-        model: Model,
-        valid_time: NaiveDateTime,
-        lat: f64,
-        lon: f64,
-        elev_m: f64,
-    },
-}
-
-#[derive(Clone, Debug, Hash)]
-struct StatsRecordKey<'a> {
-    site_id: &'a str,
-    model: Model,
-    valid_time: NaiveDateTime,
-}
-
-/// The struct creates and caches several prepared statements.
-pub struct ClimoDBInterface<'a, 'b: 'a> {
+/// The struct creates and caches several prepared statements for adding data to the climo database.
+pub struct ClimoBuilderInterface<'a, 'b: 'a> {
     climo_db: &'b ClimoDB,
     add_location_query: Statement<'a>,
     add_data_query: Statement<'a>,
@@ -153,45 +51,21 @@ pub struct ClimoDBInterface<'a, 'b: 'a> {
     write_buffer: Vec<StatsRecord>,
 }
 
-impl<'a, 'b> ClimoDBInterface<'a, 'b> {
-    const BUFSIZE: usize = 2048;
+impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
+    const BUFSIZE: usize = 4096;
+
     pub fn initialize(climo_db: &'b ClimoDB) -> Result<Self, Box<dyn Error>> {
         let conn = &climo_db.conn;
-        let add_location_query = conn.prepare(
-            "
-                INSERT OR IGNORE INTO 
-                locations (site, model, start_date, latitude, longitude, elevation_m)
-                VALUES(?1, ?2, ?3, ?4, ?5, ?6)
-            ",
-        )?;
+        let add_location_query = conn.prepare(include_str!("sql/add_location.sql"))?;
+        let add_data_query = conn.prepare(include_str!("sql/add_data.sql"))?;
+        let init_times_query = conn.prepare(include_str!("sql/init_times.sql"))?;
 
-        let add_data_query = conn.prepare(
-            "
-                INSERT OR REPLACE INTO
-                cli (site, model, valid_time, year_lcl, month_lcl, day_lcl, hour_lcl, 
-                    haines_high, haines_mid, haines_low, hdw, conv_t_def_c, dry_cape, wet_cape,
-                    cape_ratio, ccl_agl_m, el_asl_m, mlcape, mlcin, dcape, ml_sfc_t_c, ml_sfc_rh,
-                    sfc_wspd_kt, sfc_wdir)
-                VALUES 
-                (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24)
-            ",
-        )?;
-
-        let init_times_query = conn.prepare(
-            "
-                SELECT valid_time FROM 
-                cli
-                WHERE site = ?1 AND MODEL = ?2
-            ",
-        )?;
-
-        Ok(ClimoDBInterface {
+        Ok(ClimoBuilderInterface {
             climo_db,
             add_location_query,
             add_data_query,
             init_times_query,
-            write_buffer: Vec::with_capacity(ClimoDBInterface::BUFSIZE),
+            write_buffer: Vec::with_capacity(ClimoBuilderInterface::BUFSIZE),
         })
     }
 
@@ -214,10 +88,10 @@ impl<'a, 'b> ClimoDBInterface<'a, 'b> {
 
     #[inline]
     pub fn add(&mut self, record: StatsRecord) -> Result<(), Box<dyn Error>> {
-        debug_assert!(self.write_buffer.len() <= ClimoDBInterface::BUFSIZE);
+        debug_assert!(self.write_buffer.len() <= ClimoBuilderInterface::BUFSIZE);
         self.write_buffer.push(record);
 
-        if self.write_buffer.len() == ClimoDBInterface::BUFSIZE {
+        if self.write_buffer.len() == ClimoBuilderInterface::BUFSIZE {
             self.flush()?;
         }
 
@@ -236,23 +110,13 @@ impl<'a, 'b> ClimoDBInterface<'a, 'b> {
                     site,
                     model,
                     valid_time,
-                    hns_low,
-                    hns_mid,
-                    hns_high,
                     hdw,
                     conv_t_def,
                     dry_cape,
                     wet_cape,
                     cape_ratio,
-                    ccl_agl_m,
-                    el_asl_m,
-                    mlcape,
-                    mlcin,
-                    dcape,
-                    ml_sfc_t,
-                    ml_sfc_rh,
-                    sfc_wspd_kt,
-                    sfc_wdir,
+                    e0,
+                    de,
                 } => {
                     let lcl_time = site
                         .time_zone
@@ -272,23 +136,13 @@ impl<'a, 'b> ClimoDBInterface<'a, 'b> {
                             &month_lcl as &ToSql,
                             &day_lcl as &ToSql,
                             &hour_lcl as &ToSql,
-                            &hns_high as &ToSql,
-                            &hns_mid as &ToSql,
-                            &hns_low as &ToSql,
                             &hdw as &ToSql,
                             &conv_t_def as &ToSql,
                             &dry_cape as &ToSql,
                             &wet_cape as &ToSql,
                             &cape_ratio as &ToSql,
-                            &ccl_agl_m as &ToSql,
-                            &el_asl_m as &ToSql,
-                            &mlcape as &ToSql,
-                            &mlcin as &ToSql,
-                            &dcape as &ToSql,
-                            &ml_sfc_t as &ToSql,
-                            &ml_sfc_rh as &ToSql,
-                            &sfc_wspd_kt as &ToSql,
-                            &sfc_wdir as &ToSql,
+                            &e0 as &ToSql,
+                            &de as &ToSql,
                         ])
                         .map(|_| ())?
                 }
@@ -321,8 +175,162 @@ impl<'a, 'b> ClimoDBInterface<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Drop for ClimoDBInterface<'a, 'b> {
+impl<'a, 'b> Drop for ClimoBuilderInterface<'a, 'b> {
     fn drop(&mut self) {
         self.flush().unwrap()
+    }
+}
+
+/// This struct creates and caches several statements for querying the database.
+pub struct ClimoQueryInterface<'a, 'b: 'a> {
+    climo_db: &'b ClimoDB,
+    hourly_decile_statements: [Option<Statement<'a>>; ClimoElement::NUM_VARIANTS],
+}
+
+/// Elements we can query for climo data.
+#[derive(Clone, Copy, Debug)]
+pub enum ClimoElement {
+    HDW = 0,
+    ConvectiveTDeficit,
+    DryCape,
+    WetCape,
+    CapeRatio,
+    E0,
+    DE,
+}
+
+impl ClimoElement {
+    const NUM_VARIANTS: usize = 7;
+
+    fn into_index(self) -> usize {
+        self as usize
+    }
+
+    fn into_column_name(self) -> &'static str {
+        use ClimoElement::*;
+
+        match self {
+            HDW => "hdw",
+            ConvectiveTDeficit => "conv_t_def_c",
+            DryCape => "dry_cape",
+            WetCape => "wet_cape",
+            CapeRatio => "cape_ratio",
+            E0 => "e0",
+            DE => "de",
+        }
+    }
+}
+
+/// Struct for holding deciles data.
+#[derive(Clone, Debug)]
+pub struct HourlyDeciles {
+    pub element: ClimoElement,
+    pub valid_times: Vec<NaiveDateTime>,
+    pub deciles: Vec<[f64; 11]>, // index 0 = min, index 10 = max, otherwise index*10 = percentile
+}
+
+impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
+    /// Initialize the interface.
+    pub fn initialize(climo_db: &'b ClimoDB) -> Self {
+        let hourly_decile_statements = [None, None, None, None, None, None, None];
+        Self {
+            climo_db,
+            hourly_decile_statements,
+        }
+    }
+
+    fn get_hourly_deciles_statement(
+        &mut self,
+        element: ClimoElement,
+    ) -> Result<&mut Statement<'a>, Box<dyn Error>> {
+        let opt = &mut self.hourly_decile_statements[element.into_index()];
+        if opt.is_none() {
+            *opt = Some(self.climo_db.conn.prepare(&format!(
+                include_str!("sql/hourly_deciles.sql"),
+                element.into_column_name()
+            ))?);
+        }
+
+        Ok(opt.as_mut().unwrap())
+    }
+
+    /// Retrieve hourly deciles for the requested site and model.
+    pub fn hourly_deciles(
+        &mut self,
+        site: &Site,
+        model: Model,
+        element: ClimoElement,
+        start_time: NaiveDateTime,
+        end_time: NaiveDateTime,
+    ) -> Result<HourlyDeciles, Box<dyn Error>> {
+        debug_assert!(end_time > start_time);
+
+        let model_str = model.as_static();
+
+        // Need one week either side of the start and end to get all the data in the window.
+        let early_start = start_time - Duration::days(7);
+        let late_end = end_time + Duration::days(7);
+
+        let statement = self.get_hourly_deciles_statement(element)?;
+
+        let mut data: Vec<(NaiveDateTime, f64)> = statement
+            .query_map(params![site.id, model_str], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
+            // Filter out errors
+            .filter_map(Result::ok)
+            // Filter out data that is outside the range I care about
+            .filter(move |(valid_time, _val)| *valid_time >= early_start && *valid_time <= late_end)
+            .collect();
+        // Sort by value in ascending order.
+        data.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        let data = data;
+
+        let num_elements = ((end_time - start_time).num_hours() + 1) as usize;
+        let mut deciles: Vec<[f64; 11]> = Vec::with_capacity(num_elements);
+        let mut valid_times: Vec<NaiveDateTime> = Vec::with_capacity(num_elements);
+        let mut curr_time = start_time;
+        while curr_time <= end_time {
+            let filter_start = curr_time - Duration::days(7);
+            let filter_end = curr_time + Duration::days(7);
+            let filter_hour = curr_time.hour();
+
+            let vals: Vec<f64> = data
+                .iter()
+                .filter(|(vt, _val)| {
+                    *vt >= filter_start && *vt <= filter_end && vt.hour() == filter_hour
+                })
+                .map(|(_vt, val)| *val)
+                .collect();
+
+            let max_idx: f32 = (vals.len() - 1) as f32;
+            let percentile_idx =
+                |percentile: f32| -> usize { (max_idx * percentile).round() as usize };
+
+            let deciles_for_date = [
+                vals[0],                    // minimum
+                vals[percentile_idx(0.10)], // 10th percentile
+                vals[percentile_idx(0.20)], // 20th percentile
+                vals[percentile_idx(0.30)], // 30th percentile
+                vals[percentile_idx(0.40)], // 40th percentile
+                vals[vals.len() / 2],       // median
+                vals[percentile_idx(0.60)], // 60th percentile
+                vals[percentile_idx(0.70)], // 70th percentile
+                vals[percentile_idx(0.80)], // 80th percentile
+                vals[percentile_idx(0.90)], // 90th percentile
+                vals[vals.len() - 1],       // maximum
+            ];
+
+            deciles.push(deciles_for_date);
+            valid_times.push(curr_time);
+
+            curr_time += Duration::hours(1);
+        }
+
+        Ok(HourlyDeciles {
+            element,
+            deciles,
+            valid_times,
+        })
     }
 }

@@ -1,15 +1,11 @@
-use super::{climo_db::StatsRecord, CmdLineArgs};
-use crate::climo_db::{ClimoDB, ClimoDBInterface};
+use crate::CmdLineArgs;
+use bufcli::{ClimoBuilderInterface, ClimoDB, StatsRecord};
 use bufkit_data::{Archive, BufkitDataErr, Model, Site};
 use chrono::NaiveDateTime;
 use crossbeam_channel::{self as channel, Receiver, Sender};
 use itertools::iproduct;
-use metfor::{rh, Knots, Quantity, WindSpdDir};
 use pbr::ProgressBar;
-use sounding_analysis::{
-    convective_parcel, dcape, haines_high, haines_low, haines_mid, hot_dry_windy, lift_parcel,
-    mixed_layer_parcel, partition_cape, Analysis, Parcel,
-};
+use sounding_analysis::Analysis;
 use sounding_bufkit::BufkitData;
 use std::{
     collections::HashSet,
@@ -38,6 +34,8 @@ pub(crate) fn build_climo(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
     let (stats_snd, stats_rcv) = channel::bounded::<StatsRecord>(CAPACITY);
 
     // Hook everything together
+    let stats_jh = start_stats_thread(root, stats_rcv)?;
+
     let (ep_jh, total_num) = start_entry_point_thread(args, entry_point_snd)?;
     let load_jh = start_load_thread(root, load_requests_rcv, parse_requests_snd)?;
 
@@ -47,8 +45,6 @@ pub(crate) fn build_climo(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
         start_cli_stats_thread(cli_requests_rcv, loc_requests_snd, stats_snd.clone())?;
 
     let loc_stats_jh = start_location_stats_thread(loc_requests_rcv, comp_notify_snd, stats_snd)?;
-
-    let stats_jh = start_stats_thread(root, stats_rcv)?;
 
     // Monitor progress and post updates here
     let mut pb = ProgressBar::new(total_num as u64);
@@ -121,7 +117,7 @@ fn start_entry_point_thread(
 
             let climo_db = ClimoDB::connect_or_create(&args.root).map_err(|err| err.to_string())?;
             let mut climo_db =
-                ClimoDBInterface::initialize(&climo_db).map_err(|err| err.to_string())?;
+                ClimoBuilderInterface::initialize(&climo_db).map_err(|err| err.to_string())?;
 
             let mut counter = 0;
             for (site, &model) in iproduct!(&sites, &args.models) {
@@ -313,136 +309,12 @@ fn start_cli_stats_thread(
                         } = msg
                         {
                             {
-                                let snd = anal.sounding();
-
-                                let hns_low = i32::from(haines_low(snd).unwrap_or(0));
-                                let hns_mid = i32::from(haines_mid(snd).unwrap_or(0));
-                                let hns_high = i32::from(haines_high(snd).unwrap_or(0));
-
-                                let hdw = match hot_dry_windy(snd) {
-                                    Ok(hdw) => hdw as i32,
-                                    Err(err) => {
-                                        let message = PipelineMessage::DataError {
-                                            num,
-                                            site,
-                                            model,
-                                            valid_time,
-                                            msg: err.to_string(),
-                                        };
-                                        local_location_requests
-                                            .send(message)
-                                            .expect("Error sending message.");
-                                        continue;
-                                    }
-                                };
-
-                                let ml_parcel: Option<Parcel> = mixed_layer_parcel(snd).ok();
-
-                                let (mlcape, mlcin, ml_sfc_t, ml_sfc_rh) = {
-                                    if let Some(parcel) = ml_parcel {
-                                        let ml_sfc_t = Some(parcel.temperature.unpack() as i32);
-                                        let ml_sfc_rh = rh(parcel.temperature, parcel.dew_point)
-                                            .map(|rh| (rh * 100.0) as i32);
-
-                                        if let Ok(anal) = lift_parcel(parcel, snd) {
-                                            let cape = anal.cape().map(|cape| cape.unpack() as i32);
-                                            let cin = anal.cin().map(|cin| cin.unpack() as i32);
-                                            (cape, cin, ml_sfc_t, ml_sfc_rh)
-                                        } else {
-                                            (None, None, ml_sfc_t, ml_sfc_rh)
-                                        }
-                                    } else {
-                                        (None, None, None, None)
-                                    }
-                                };
-
-                                let (
-                                    conv_t_def,
-                                    dry_cape,
-                                    wet_cape,
-                                    cape_ratio,
-                                    ccl_agl_m,
-                                    el_asl_m,
-                                ) = {
-                                    if let Ok(parcel) = convective_parcel(snd) {
-                                        let conv_t_def = ml_parcel.map(|ml_pcl| {
-                                            (parcel.temperature - ml_pcl.temperature).unpack()
-                                        });
-
-                                        let parcel_anal = lift_parcel(parcel, snd).ok();
-
-                                        let (dry, wet) = parcel_anal
-                                            .as_ref()
-                                            .and_then(|profile_anal| {
-                                                partition_cape(&profile_anal)
-                                                    .ok()
-                                                    .map(|(dry, wet)| (Some(dry), Some(wet)))
-                                            })
-                                            .unwrap_or((None, None));
-
-                                        let cape_ratio =
-                                            dry.and_then(|dry| wet.map(|wet| wet / dry));
-                                        let dry = dry.map(|dry| dry.unpack().round() as i32);
-                                        let wet = wet.map(|wet| wet.unpack().round() as i32);
-
-                                        let (ccl_agl_m, el_asl_m) = parcel_anal
-                                            .as_ref()
-                                            .and_then(|profile_anal| {
-                                                let ccl = profile_anal
-                                                    .lcl_height_agl()
-                                                    .map(|ccl| ccl.unpack().round() as i32);
-                                                let el = profile_anal
-                                                    .el_height_asl()
-                                                    .map(|el| el.unpack().round() as i32);
-
-                                                Some((ccl, el))
-                                            })
-                                            .unwrap_or((None, None));
-
-                                        (conv_t_def, dry, wet, cape_ratio, ccl_agl_m, el_asl_m)
-                                    } else {
-                                        (None, None, None, None, None, None)
-                                    }
-                                };
-
-                                let dcp = dcape(snd)
-                                    .ok()
-                                    .map(|(_, dcp, _)| dcp.unpack().round() as i32);
-
-                                let (sfc_wspd_kt, sfc_wdir) = snd
-                                    .sfc_wind()
-                                    .into_option()
-                                    .map(|wind| {
-                                        let WindSpdDir {
-                                            speed: Knots(spd),
-                                            direction: dir,
-                                        } = wind;
-                                        (Some(spd.round() as i32), Some(dir.round() as i32))
-                                    })
-                                    .unwrap_or_else(|| (None, None));
-
-                                let message = StatsRecord::CliData {
-                                    site: site.clone(),
+                                let message = StatsRecord::create_cli_data(
+                                    site.clone(),
                                     model,
                                     valid_time,
-                                    hns_low,
-                                    hns_mid,
-                                    hns_high,
-                                    hdw,
-                                    conv_t_def,
-                                    dry_cape,
-                                    wet_cape,
-                                    cape_ratio,
-                                    ccl_agl_m,
-                                    el_asl_m,
-                                    mlcape,
-                                    mlcin,
-                                    dcape: dcp,
-                                    ml_sfc_t,
-                                    ml_sfc_rh,
-                                    sfc_wspd_kt,
-                                    sfc_wdir,
-                                };
+                                    &anal,
+                                );
                                 local_update_requests
                                     .send(message)
                                     .expect("Error sending message.");
@@ -499,51 +371,37 @@ fn start_location_stats_thread(
                         .map(|lt| lt == 0)
                         .unwrap_or(true)
                     {
-                        let snd = anal.sounding();
+                        match StatsRecord::create_location_data(site, model, valid_time, &anal) {
+                            Ok(msg) => {
+                                climo_update_requests
+                                    .send(msg)
+                                    .map_err(|err| err.to_string())?;
 
-                        let location = snd.station_info().location();
-                        let elevation = snd
-                            .station_info()
-                            .elevation()
-                            .into_option()
-                            .map(Quantity::unpack);
-
-                        if let (Some(elev_m), Some((lat, lon))) = (elevation, location) {
-                            let message = StatsRecord::Location {
-                                site,
-                                model,
-                                valid_time,
-                                lat,
-                                lon,
-                                elev_m,
-                            };
-                            climo_update_requests
-                                .send(message)
-                                .map_err(|err| err.to_string())?;
-                        } else {
-                            let message = PipelineMessage::DataError {
-                                num,
-                                site,
-                                model,
-                                valid_time,
-                                msg: "Missing location information".to_string(),
-                            };
-                            completed_notification
-                                .send(message)
-                                .map_err(|err| err.to_string())?;
+                                completed_notification
+                                    .send(PipelineMessage::Completed { num })
+                                    .map_err(|err| err.to_string())?;
+                            }
+                            Err(site) => {
+                                let message = PipelineMessage::DataError {
+                                    num,
+                                    site,
+                                    model,
+                                    valid_time,
+                                    msg: "Missing location information".to_string(),
+                                };
+                                completed_notification
+                                    .send(message)
+                                    .map_err(|err| err.to_string())?;
+                            }
                         }
                     }
-
-                    let message = PipelineMessage::Completed { num };
-                    completed_notification
-                        .send(message)
-                        .map_err(|err| err.to_string())?;
                 } else {
                     completed_notification
                         .send(msg)
                         .map_err(|err| err.to_string())?;
                 }
             }
+
             Ok(())
         })?;
 
@@ -561,7 +419,7 @@ fn start_stats_thread(
         .spawn(move || -> Result<(), String> {
             let climo_db = ClimoDB::connect_or_create(&root).map_err(|err| err.to_string())?;
             let mut climo_db =
-                ClimoDBInterface::initialize(&climo_db).map_err(|err| err.to_string())?;
+                ClimoBuilderInterface::initialize(&climo_db).map_err(|err| err.to_string())?;
 
             for msg in stats_rcv {
                 climo_db.add(msg).map_err(|err| err.to_string())?;
