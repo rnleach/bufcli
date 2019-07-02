@@ -258,14 +258,12 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
     pub fn hourly_deciles(
         &mut self,
         site: &Site,
-        model: Model,
+        model: &str,
         element: ClimoElement,
         start_time: NaiveDateTime,
         end_time: NaiveDateTime,
     ) -> Result<HourlyDeciles, Box<dyn Error>> {
         debug_assert!(end_time > start_time);
-
-        let model_str = model.as_static();
 
         // Need one week either side of the start and end to get all the data in the window.
         let early_start = start_time - Duration::days(7);
@@ -274,7 +272,7 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
         let statement = self.get_hourly_deciles_statement(element)?;
 
         let mut data: Vec<(NaiveDateTime, f64)> = statement
-            .query_map(params![site.id, model_str], |row| {
+            .query_map(params![site.id, model], |row| {
                 Ok((row.get(0)?, row.get(1)?))
             })?
             // Filter out errors

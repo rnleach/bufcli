@@ -1,5 +1,5 @@
 use bufcli::{ClimoDB, ClimoElement, ClimoQueryInterface, HourlyDeciles};
-use bufkit_data::{Model, Site};
+use bufkit_data::Site;
 use chrono::NaiveDate;
 use itertools::izip;
 use std::{
@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         auto_download: false,
         time_zone: None,
     };
-    let model = Model::NAM4KM;
+    let model = "nam4km";
     let element = ClimoElement::HDW;
     let start_time = NaiveDate::from_ymd(2017, 8, 28).and_hms(12, 0, 0);
     let end_time = NaiveDate::from_ymd(2017, 9, 5).and_hms(12, 0, 0);
