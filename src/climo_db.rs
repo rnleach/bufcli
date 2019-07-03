@@ -293,11 +293,49 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
             let filter_end = curr_time + Duration::days(7);
             let filter_hour = curr_time.hour();
 
+            let start_month = filter_start.month();
+            let start_day = filter_start.day();
+            let end_month = filter_end.month();
+            let end_day = filter_end.day();
+
+            let in_window = move |vt: NaiveDateTime| -> bool {
+                let vt_month = vt.month();
+                let vt_day = vt.day();
+
+                if start_month < end_month {
+                    if vt_month == start_month && vt_day >= start_day {
+                        true
+                    } else if vt_month == end_month && vt_day <= end_day {
+                        true
+                    } else if vt_month > start_month && vt_month < end_month {
+                        true
+                    } else {
+                        false
+                    }
+                } else if start_month == end_month {
+                    if vt_day >= start_day && vt_day <= end_day {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    // start_month > end_month, wrap around the year
+                    if vt_month == start_month && vt_day >= start_day {
+                        true
+                    } else if vt_month == end_month && vt_day <= end_day {
+                        true
+                    } else if vt_month > start_month || vt_month < end_month {
+                        true
+                    } else {
+                        false
+                    }
+                }
+            };
+
             let vals: Vec<f64> = data
                 .iter()
-                .filter(|(vt, _val)| {
-                    *vt >= filter_start && *vt <= filter_end && vt.hour() == filter_hour
-                })
+                .filter(|(vt, _val)| vt.hour() == filter_hour)
+                .filter(|(vt, _val)| in_window(*vt))
                 .map(|(_vt, val)| *val)
                 .collect();
             if vals.is_empty() {
