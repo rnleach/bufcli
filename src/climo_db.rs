@@ -301,6 +301,7 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
                 .map(|(_vt, val)| *val)
                 .collect();
             if vals.is_empty() {
+                curr_time += Duration::hours(1);
                 continue;
             }
             let max_idx: f32 = (vals.len() - 1) as f32;
