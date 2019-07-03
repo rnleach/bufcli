@@ -300,7 +300,9 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
                 })
                 .map(|(_vt, val)| *val)
                 .collect();
-
+            if vals.is_empty() {
+                continue;
+            }
             let max_idx: f32 = (vals.len() - 1) as f32;
             let percentile_idx =
                 |percentile: f32| -> usize { (max_idx * percentile).round() as usize };
@@ -323,6 +325,10 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
             valid_times.push(curr_time);
 
             curr_time += Duration::hours(1);
+        }
+
+        if valid_times.is_empty() {
+            return Err(Box::new(crate::BufcliError::new("No climate data")));
         }
 
         Ok(HourlyDeciles {

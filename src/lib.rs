@@ -10,6 +10,7 @@
 //
 pub use crate::{
     climo_db::{ClimoBuilderInterface, ClimoDB, ClimoElement, ClimoQueryInterface, HourlyDeciles},
+    error::BufcliError,
     stats_record::StatsRecord,
 };
 
@@ -17,4 +18,5 @@ pub use crate::{
 // Private implementation.
 //
 mod climo_db;
+mod error;
 mod stats_record;
