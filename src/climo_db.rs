@@ -188,7 +188,7 @@ pub struct ClimoQueryInterface<'a, 'b: 'a> {
 }
 
 /// Elements we can query for climo data.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClimoElement {
     HDW = 0,
     ConvectiveTDeficit,
@@ -269,6 +269,8 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
         let early_start = start_time - Duration::days(7);
         let late_end = end_time + Duration::days(7);
 
+        let in_window = make_window_func(early_start, late_end);
+
         let statement = self.get_hourly_deciles_statement(element)?;
 
         let mut data: Vec<(NaiveDateTime, f64)> = statement
@@ -278,7 +280,7 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
             // Filter out errors
             .filter_map(Result::ok)
             // Filter out data that is outside the range I care about
-            .filter(move |(valid_time, _val)| *valid_time >= early_start && *valid_time <= late_end)
+            .filter(|(valid_time, _val)| in_window(*valid_time))
             .collect();
         // Sort by value in ascending order.
         data.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -293,44 +295,7 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
             let filter_end = curr_time + Duration::days(7);
             let filter_hour = curr_time.hour();
 
-            let start_month = filter_start.month();
-            let start_day = filter_start.day();
-            let end_month = filter_end.month();
-            let end_day = filter_end.day();
-
-            let in_window = move |vt: NaiveDateTime| -> bool {
-                let vt_month = vt.month();
-                let vt_day = vt.day();
-
-                if start_month < end_month {
-                    if vt_month == start_month && vt_day >= start_day {
-                        true
-                    } else if vt_month == end_month && vt_day <= end_day {
-                        true
-                    } else if vt_month > start_month && vt_month < end_month {
-                        true
-                    } else {
-                        false
-                    }
-                } else if start_month == end_month {
-                    if vt_day >= start_day && vt_day <= end_day {
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    // start_month > end_month, wrap around the year
-                    if vt_month == start_month && vt_day >= start_day {
-                        true
-                    } else if vt_month == end_month && vt_day <= end_day {
-                        true
-                    } else if vt_month > start_month || vt_month < end_month {
-                        true
-                    } else {
-                        false
-                    }
-                }
-            };
+            let in_window = make_window_func(filter_start, filter_end);
 
             let vals: Vec<f64> = data
                 .iter()
@@ -375,5 +340,46 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
             deciles,
             valid_times,
         })
+    }
+}
+
+fn make_window_func(start: NaiveDateTime, end: NaiveDateTime) -> impl Fn(NaiveDateTime) -> bool {
+    let start_month = start.month();
+    let start_day = start.day();
+    let end_month = end.month();
+    let end_day = end.day();
+
+    move |vt: NaiveDateTime| -> bool {
+        let vt_month = vt.month();
+        let vt_day = vt.day();
+
+        if start_month < end_month {
+            if vt_month == start_month && vt_day >= start_day {
+                true
+            } else if vt_month == end_month && vt_day <= end_day {
+                true
+            } else if vt_month > start_month && vt_month < end_month {
+                true
+            } else {
+                false
+            }
+        } else if start_month == end_month {
+            if vt_day >= start_day && vt_day <= end_day {
+                true
+            } else {
+                false
+            }
+        } else {
+            // start_month > end_month, wrap around the year
+            if vt_month == start_month && vt_day >= start_day {
+                true
+            } else if vt_month == end_month && vt_day <= end_day {
+                true
+            } else if vt_month > start_month || vt_month < end_month {
+                true
+            } else {
+                false
+            }
+        }
     }
 }
