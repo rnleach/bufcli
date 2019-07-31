@@ -177,7 +177,8 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
 
 impl<'a, 'b> Drop for ClimoBuilderInterface<'a, 'b> {
     fn drop(&mut self) {
-        self.flush().unwrap()
+        self.flush().unwrap();
+        self.climo_db.conn.execute("VACUUM", NO_PARAMS).unwrap();
     }
 }
 
