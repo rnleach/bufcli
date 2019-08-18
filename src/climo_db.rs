@@ -79,7 +79,7 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
 
         let valid_times: Result<Vec<NaiveDateTime>, _> = self
             .init_times_query
-            .query_map(&[&site.id as &ToSql, &model_str], |row| row.get(0))?
+            .query_map(&[&site.id as &dyn ToSql, &model_str], |row| row.get(0))?
             .collect();
         let valid_times = valid_times?;
 
@@ -129,20 +129,20 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
 
                     self.add_data_query
                         .execute(&[
-                            &site.id as &ToSql,
+                            &site.id as &dyn ToSql,
                             &model.as_static(),
-                            &valid_time as &ToSql,
-                            &year_lcl as &ToSql,
-                            &month_lcl as &ToSql,
-                            &day_lcl as &ToSql,
-                            &hour_lcl as &ToSql,
-                            &hdw as &ToSql,
-                            &conv_t_def as &ToSql,
-                            &dry_cape as &ToSql,
-                            &wet_cape as &ToSql,
-                            &cape_ratio as &ToSql,
-                            &e0 as &ToSql,
-                            &de as &ToSql,
+                            &valid_time as &dyn ToSql,
+                            &year_lcl as &dyn ToSql,
+                            &month_lcl as &dyn ToSql,
+                            &day_lcl as &dyn ToSql,
+                            &hour_lcl as &dyn ToSql,
+                            &hdw as &dyn ToSql,
+                            &conv_t_def as &dyn ToSql,
+                            &dry_cape as &dyn ToSql,
+                            &wet_cape as &dyn ToSql,
+                            &cape_ratio as &dyn ToSql,
+                            &e0 as &dyn ToSql,
+                            &de as &dyn ToSql,
                         ])
                         .map(|_| ())?
                 }
@@ -156,12 +156,12 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
                 } => self
                     .add_location_query
                     .execute(&[
-                        &site.id as &ToSql,
+                        &site.id as &dyn ToSql,
                         &model.as_static(),
-                        &valid_time as &ToSql,
-                        &lat as &ToSql,
-                        &lon as &ToSql,
-                        &elev_m as &ToSql,
+                        &valid_time as &dyn ToSql,
+                        &lat as &dyn ToSql,
+                        &lon as &dyn ToSql,
+                        &elev_m as &dyn ToSql,
                     ])
                     .map(|_| ())?,
             }
