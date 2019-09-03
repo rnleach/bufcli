@@ -5,7 +5,7 @@ use chrono::NaiveDateTime;
 use crossbeam_channel::{self as channel, Receiver, Sender};
 use itertools::iproduct;
 use pbr::ProgressBar;
-use sounding_analysis::Analysis;
+use sounding_analysis::Sounding;
 use sounding_bufkit::BufkitData;
 use std::{
     collections::HashSet,
@@ -240,20 +240,19 @@ fn start_parser_thread(
                         }
                     };
 
-                    for anal in bufkit_data.into_iter().take_while(|anal| {
-                        anal.sounding()
-                            .lead_time()
+                    for (snd, _) in bufkit_data.into_iter().take_while(|(snd, _)| {
+                        snd.lead_time()
                             .into_option()
                             .and_then(|lt| Some(i64::from(lt) < model.hours_between_runs()))
                             .unwrap_or(false)
                     }) {
-                        if let Some(valid_time) = anal.sounding().valid_time() {
+                        if let Some(valid_time) = snd.valid_time() {
                             let message = PipelineMessage::CliData {
                                 num,
                                 site: site.clone(),
                                 model,
                                 valid_time,
-                                anal: Box::new(anal),
+                                snd: Box::new(snd),
                             };
                             cli_requests.send(message).map_err(|err| err.to_string())?;
                         } else {
@@ -284,13 +283,13 @@ fn start_cli_stats_thread(
     climo_update_requests: Sender<StatsRecord>,
 ) -> Result<JoinHandle<Result<(), String>>, Box<dyn Error>> {
     let jh = thread::Builder::new()
-        .name("CliDataStatsCalc".to_string())
+        .name("CliStatsBuilder".to_string())
         .spawn(move || -> Result<(), String> {
-            const POOL_SIZE: usize = 2;
+            const POOL_SIZE: usize = 6;
 
             let pool = threadpool::Builder::new()
                 .num_threads(POOL_SIZE)
-                .thread_name("CliDataStatsCalc_".to_string())
+                .thread_name("CliStatsCalc".to_string())
                 .build();
 
             for _ in 0..POOL_SIZE {
@@ -305,7 +304,7 @@ fn start_cli_stats_thread(
                             site,
                             model,
                             valid_time,
-                            anal,
+                            snd,
                         } = msg
                         {
                             {
@@ -313,7 +312,7 @@ fn start_cli_stats_thread(
                                     site.clone(),
                                     model,
                                     valid_time,
-                                    &anal,
+                                    &snd,
                                 );
                                 local_update_requests
                                     .send(message)
@@ -325,7 +324,7 @@ fn start_cli_stats_thread(
                                 site,
                                 model,
                                 valid_time,
-                                anal,
+                                snd,
                             };
                             local_location_requests
                                 .send(message)
@@ -361,17 +360,16 @@ fn start_location_stats_thread(
                     site,
                     model,
                     valid_time,
-                    anal,
+                    snd,
                 } = msg
                 {
-                    if anal
-                        .sounding()
+                    if snd
                         .lead_time()
                         .into_option()
                         .map(|lt| lt == 0)
                         .unwrap_or(true)
                     {
-                        match StatsRecord::create_location_data(site, model, valid_time, &anal) {
+                        match StatsRecord::create_location_data(site, model, valid_time, &snd) {
                             Ok(msg) => {
                                 climo_update_requests
                                     .send(msg)
@@ -451,14 +449,14 @@ enum PipelineMessage {
         site: Site,
         model: Model,
         valid_time: NaiveDateTime,
-        anal: Box<Analysis>,
+        snd: Box<Sounding>,
     },
     Location {
         num: usize,
         site: Site,
         model: Model,
         valid_time: NaiveDateTime,
-        anal: Box<Analysis>,
+        snd: Box<Sounding>,
     },
     Completed {
         num: usize,

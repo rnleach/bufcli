@@ -10,13 +10,8 @@ cli (
 		hour_lcl,
 
 		hdw,
-		conv_t_def_c,
-		dry_cape,
-		wet_cape,
-		cape_ratio,
-
-		e0,
-		de
+		blow_up_dt,
+		blow_up_meters
 	)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);
 

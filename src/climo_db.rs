@@ -111,12 +111,8 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
                     model,
                     valid_time,
                     hdw,
-                    conv_t_def,
-                    dry_cape,
-                    wet_cape,
-                    cape_ratio,
-                    e0,
-                    de,
+                    blow_up_dt,
+                    blow_up_meters,
                 } => {
                     let lcl_time = site
                         .time_zone
@@ -137,12 +133,8 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
                             &day_lcl as &dyn ToSql,
                             &hour_lcl as &dyn ToSql,
                             &hdw as &dyn ToSql,
-                            &conv_t_def as &dyn ToSql,
-                            &dry_cape as &dyn ToSql,
-                            &wet_cape as &dyn ToSql,
-                            &cape_ratio as &dyn ToSql,
-                            &e0 as &dyn ToSql,
-                            &de as &dyn ToSql,
+                            &blow_up_dt as &dyn ToSql,
+                            &blow_up_meters as &dyn ToSql,
                         ])
                         .map(|_| ())?
                 }
@@ -355,32 +347,16 @@ fn make_window_func(start: NaiveDateTime, end: NaiveDateTime) -> impl Fn(NaiveDa
         let vt_day = vt.day();
 
         if start_month < end_month {
-            if vt_month == start_month && vt_day >= start_day {
-                true
-            } else if vt_month == end_month && vt_day <= end_day {
-                true
-            } else if vt_month > start_month && vt_month < end_month {
-                true
-            } else {
-                false
-            }
+            (vt_month == start_month && vt_day >= start_day)
+                || (vt_month == end_month && vt_day <= end_day)
+                || (vt_month > start_month && vt_month < end_month)
         } else if start_month == end_month {
-            if vt_day >= start_day && vt_day <= end_day {
-                true
-            } else {
-                false
-            }
+            vt_day >= start_day && vt_day <= end_day
         } else {
             // start_month > end_month, wrap around the year
-            if vt_month == start_month && vt_day >= start_day {
-                true
-            } else if vt_month == end_month && vt_day <= end_day {
-                true
-            } else if vt_month > start_month || vt_month < end_month {
-                true
-            } else {
-                false
-            }
+            (vt_month == start_month && vt_day >= start_day)
+                || (vt_month == end_month && vt_day <= end_day)
+                || (vt_month > start_month || vt_month < end_month)
         }
     }
 }

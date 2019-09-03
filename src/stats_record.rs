@@ -1,9 +1,9 @@
 use bufkit_data::{Model, Site};
 use chrono::NaiveDateTime;
-use metfor::Quantity;
+use metfor::{CelsiusDiff, Meters, Quantity};
 use sounding_analysis::{
-    convective_parcel, convective_parcel_initiation_energetics, hot_dry_windy, lift_parcel,
-    partition_cape, Analysis,
+    experimental::fire::{blow_up, BlowUpAnalysis},
+    hot_dry_windy, Sounding,
 };
 
 #[derive(Clone, Debug)]
@@ -14,13 +14,8 @@ pub enum StatsRecord {
         valid_time: NaiveDateTime,
 
         hdw: Option<i32>,
-        conv_t_def: Option<f64>,
-        dry_cape: Option<i32>,
-        wet_cape: Option<i32>,
-        cape_ratio: Option<f64>,
-
-        e0: Option<i32>,
-        de: Option<i32>,
+        blow_up_dt: Option<f64>,
+        blow_up_meters: Option<f64>,
     },
     Location {
         site: Site,
@@ -37,44 +32,24 @@ impl StatsRecord {
         site: Site,
         model: Model,
         init_time: NaiveDateTime,
-        anal: &Analysis,
+        snd: &Sounding,
     ) -> Self {
-        let snd = anal.sounding();
-
         let hdw = hot_dry_windy(snd).ok().map(|hdw| hdw as i32);
-
-        let (conv_t_def, e0, de) = match convective_parcel_initiation_energetics(snd).ok() {
-            Some((_, conv_t_def, e0, de)) => (
-                Some(conv_t_def.unpack()),
-                Some(e0.unpack() as i32),
-                Some(de.unpack() as i32),
-            ),
-            None => (None, None, None),
+        let (blow_up_dt, blow_up_meters) = match blow_up(snd) {
+            Err(_) => (None, None),
+            Ok(BlowUpAnalysis {
+                delta_t: CelsiusDiff(blow_up_dt),
+                height: Meters(blow_up_meters),
+            }) => (Some(blow_up_dt), Some(blow_up_meters)),
         };
-
-        let (dry_cape, wet_cape, cape_ratio) = convective_parcel(snd)
-            .and_then(|pcl| lift_parcel(pcl, snd))
-            .and_then(|pcl_anal| partition_cape(&pcl_anal))
-            .map(|(dry, wet)| {
-                (
-                    Some(dry.unpack() as i32),
-                    Some(wet.unpack() as i32),
-                    Some(wet / dry),
-                )
-            })
-            .unwrap_or((None, None, None));
 
         StatsRecord::CliData {
             site,
             model,
             valid_time: init_time,
             hdw,
-            conv_t_def,
-            dry_cape,
-            wet_cape,
-            cape_ratio,
-            e0,
-            de,
+            blow_up_dt,
+            blow_up_meters,
         }
     }
 
@@ -84,9 +59,9 @@ impl StatsRecord {
         site: Site,
         model: Model,
         valid_time: NaiveDateTime,
-        anal: &Analysis,
+        snd: &Sounding,
     ) -> Result<Self, Site> {
-        let info = anal.sounding().station_info();
+        let info = snd.station_info();
 
         let location_data = info.location().and_then(|(lat, lon)| {
             info.elevation()

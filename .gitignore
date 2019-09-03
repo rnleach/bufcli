@@ -16,6 +16,7 @@ Cargo.lock
 *.sublime-*
 .vscode
 *.swp
+Session.vim
 tags
 
 #
