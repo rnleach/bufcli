@@ -16,7 +16,7 @@ itertools = "0.8"
 metfor = "0.7.0"
 pbr = "1.0.1"
 rusqlite = { version = "0.20", features = ["bundled", "chrono"], default-features = false }
-sounding-analysis = "^0.12.1"
+sounding-analysis = "^0.12.2"
 sounding-bufkit = "^0.12"
 threadpool = "1.7.1"
 strum = "0.15"

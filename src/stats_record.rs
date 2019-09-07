@@ -1,6 +1,6 @@
 use bufkit_data::{Model, Site};
 use chrono::NaiveDateTime;
-use metfor::{CelsiusDiff, Meters, Quantity};
+use metfor::Quantity;
 use sounding_analysis::{
     experimental::fire::{blow_up, BlowUpAnalysis},
     hot_dry_windy, Sounding,
@@ -35,12 +35,11 @@ impl StatsRecord {
         snd: &Sounding,
     ) -> Self {
         let hdw = hot_dry_windy(snd).ok().map(|hdw| hdw as i32);
-        let (blow_up_dt, blow_up_meters) = match blow_up(snd) {
+        let (blow_up_dt, blow_up_meters): (Option<f64>, Option<f64>) = match blow_up(snd) {
             Err(_) => (None, None),
             Ok(BlowUpAnalysis {
-                delta_t: CelsiusDiff(blow_up_dt),
-                height: Meters(blow_up_meters),
-            }) => (Some(blow_up_dt), Some(blow_up_meters)),
+                delta_t, height, ..
+            }) => (Some(delta_t.unpack()), Some(height.unpack())),
         };
 
         StatsRecord::CliData {
