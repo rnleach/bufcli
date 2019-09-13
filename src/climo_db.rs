@@ -183,17 +183,13 @@ pub struct ClimoQueryInterface<'a, 'b: 'a> {
 /// Elements we can query for climo data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClimoElement {
-    HDW = 0,
-    ConvectiveTDeficit,
-    DryCape,
-    WetCape,
-    CapeRatio,
-    E0,
-    DE,
+    HDW,
+    BlowUpDt,
+    BlowUpHeight,
 }
 
 impl ClimoElement {
-    const NUM_VARIANTS: usize = 7;
+    const NUM_VARIANTS: usize = 3;
 
     fn into_index(self) -> usize {
         self as usize
@@ -204,12 +200,8 @@ impl ClimoElement {
 
         match self {
             HDW => "hdw",
-            ConvectiveTDeficit => "conv_t_def_c",
-            DryCape => "dry_cape",
-            WetCape => "wet_cape",
-            CapeRatio => "cape_ratio",
-            E0 => "e0",
-            DE => "de",
+            BlowUpDt => "blow_up_dt",
+            BlowUpHeight => "blow_up_meters",
         }
     }
 }
@@ -225,7 +217,7 @@ pub struct HourlyDeciles {
 impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
     /// Initialize the interface.
     pub fn initialize(climo_db: &'b ClimoDB) -> Self {
-        let hourly_decile_statements = [None, None, None, None, None, None, None];
+        let hourly_decile_statements = [None, None, None];
         Self {
             climo_db,
             hourly_decile_statements,
