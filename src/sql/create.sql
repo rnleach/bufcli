@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS cli (
 
         blow_up_dt     REAL,
         blow_up_meters INT,
+
+        dcape          INT,
+
         PRIMARY KEY (site, valid_time, model, year_lcl, month_lcl, day_lcl, hour_lcl));
 
 PRAGMA cache_size=100000;

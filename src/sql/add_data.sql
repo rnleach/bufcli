@@ -11,7 +11,9 @@ cli (
 
 		hdw,
 		blow_up_dt,
-		blow_up_meters
+		blow_up_meters,
+
+        dcape
 	)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
 

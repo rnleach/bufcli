@@ -113,6 +113,7 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
                     hdw,
                     blow_up_dt,
                     blow_up_meters,
+                    dcape,
                 } => {
                     let lcl_time = site
                         .time_zone
@@ -135,6 +136,7 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
                             &hdw as &dyn ToSql,
                             &blow_up_dt as &dyn ToSql,
                             &blow_up_meters as &dyn ToSql,
+                            &dcape as &dyn ToSql,
                         ])
                         .map(|_| ())?
                 }
