@@ -10,7 +10,7 @@ use bufkit_data::{Archive, Model};
 use clap::{crate_version, App, Arg};
 use dirs::home_dir;
 use std::{error::Error, path::PathBuf, str::FromStr};
-use strum::{AsStaticRef, IntoEnumIterator};
+use strum::IntoEnumIterator;
 
 fn main() {
     if let Err(e) = run() {
@@ -72,7 +72,7 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
                 .takes_value(true)
                 .possible_values(
                     &Model::iter()
-                        .map(|val| val.as_static())
+                        .map(|val| val.as_static_str())
                         .collect::<Vec<&str>>(),
                 )
                 .help("Allowable models for this operation/program.")

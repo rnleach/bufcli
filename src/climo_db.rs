@@ -7,7 +7,6 @@ use std::{
     fs::create_dir,
     path::{Path, PathBuf},
 };
-use strum::AsStaticRef;
 
 pub struct ClimoDB {
     conn: Connection,
@@ -75,7 +74,7 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
         site: &Site,
         model: Model,
     ) -> Result<Vec<NaiveDateTime>, Box<dyn Error>> {
-        let model_str = model.as_static();
+        let model_str = model.as_static_str();
 
         let valid_times: Result<Vec<NaiveDateTime>, _> = self
             .init_times_query
@@ -127,7 +126,7 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
                     self.add_data_query
                         .execute(&[
                             &site.id as &dyn ToSql,
-                            &model.as_static(),
+                            &model.as_static_str(),
                             &valid_time as &dyn ToSql,
                             &year_lcl as &dyn ToSql,
                             &month_lcl as &dyn ToSql,
@@ -151,7 +150,7 @@ impl<'a, 'b> ClimoBuilderInterface<'a, 'b> {
                     .add_location_query
                     .execute(&[
                         &site.id as &dyn ToSql,
-                        &model.as_static(),
+                        &model.as_static_str(),
                         &valid_time as &dyn ToSql,
                         &lat as &dyn ToSql,
                         &lon as &dyn ToSql,
