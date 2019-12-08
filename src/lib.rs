@@ -9,14 +9,17 @@
 // Public API
 //
 pub use crate::{
-    climo_db::{ClimoBuilderInterface, ClimoDB, ClimoElement, ClimoQueryInterface, HourlyDeciles},
+    climo_db::{
+        ClimoCDFBuilderInterface, ClimoDB, ClimoElement, ClimoPopulateInterface,
+        ClimoQueryInterface, StatsRecord,
+    },
+    distributions::{CumulativeDistribution, Deciles, Percentile},
     error::BufcliError,
-    stats_record::StatsRecord,
 };
 
 //
 // Private implementation.
 //
 mod climo_db;
+mod distributions;
 mod error;
-mod stats_record;

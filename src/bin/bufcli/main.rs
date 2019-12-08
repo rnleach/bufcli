@@ -44,7 +44,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 }
 
 #[derive(Debug)]
-struct CmdLineArgs {
+pub(crate) struct CmdLineArgs {
     root: PathBuf,
     sites: Vec<String>,
     models: Vec<Model>,
@@ -112,7 +112,7 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
     let root = matches
         .value_of("root")
         .map(PathBuf::from)
-        .or_else(|| home_dir().and_then(|hd| Some(hd.join("bufkit"))))
+        .or_else(|| home_dir().map(|hd| hd.join("bufkit")))
         .expect("Invalid root.");
     let root_clone = root.clone();
 
@@ -155,12 +155,6 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
     })
 }
 
-#[allow(clippy::needless_pass_by_value)]
 fn reset(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
-    let path = ClimoDB::path_to_climo_db(&args.root);
-    if path.as_path().is_file() {}
-
-    ::std::fs::remove_file(&path)?;
-
-    Ok(())
+    ClimoDB::delete_climo_db(&args.root)
 }

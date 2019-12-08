@@ -61,7 +61,7 @@ impl StatsRecord {
     }
 
     /// If I was unable create a location instance, return the site so I can use it without
-    /// having to preemptively clones
+    /// having to preemptively clone
     pub fn create_location_data(
         site: Site,
         model: Model,

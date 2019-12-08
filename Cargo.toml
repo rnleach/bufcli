@@ -1,23 +1,24 @@
 [package]
 name = "bufcli"
-version = "0.5.2"
+version = "0.6.0"
 authors = ["Ryan <rnleach@users.noreply.github.com>"]
 edition = "2018"
 publish = false
 
 [dependencies]
-
-bufkit-data = "^0.10"
+bincode = "^1.2"
+bufkit-data = "^0.10.1"
 chrono = "^0.4.2"
 clap = { version = "^2.32.0", features = ["wrap_help"]}
-crossbeam-channel = "^0.3.0"
+crossbeam-channel = "^0.4.0"
 dirs = "^2.0"
 itertools = "^0.8"
 metfor = "^0.7.0"
 pbr = "^1.0.1"
-rusqlite = { version = "^0.20", features = ["bundled", "chrono"], default-features = false }
+rusqlite = { version = "^0.20", features = ["bundled", "chrono", "blob"], default-features = false }
+serde = { version = "^1.0.102", features = ["derive"] }
 sounding-analysis = "^0.12.3"
 sounding-bufkit = "^0.12"
-threadpool = "1.7.1"
 strum = "0.16"
+threadpool = "1.7.1"
 

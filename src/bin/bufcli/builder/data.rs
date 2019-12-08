@@ -1,5 +1,6 @@
+use super::CAPACITY;
 use crate::CmdLineArgs;
-use bufcli::{ClimoBuilderInterface, ClimoDB, StatsRecord};
+use bufcli::{ClimoDB, ClimoPopulateInterface, StatsRecord};
 use bufkit_data::{Archive, BufkitDataErr, Model, Site};
 use chrono::NaiveDateTime;
 use crossbeam_channel::{self as channel, Receiver, Sender};
@@ -16,19 +17,17 @@ use std::{
 };
 use threadpool;
 
-const CAPACITY: usize = 16;
-
-pub(crate) fn build_climo(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
-    use self::PipelineMessage::*;
+pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(Site, Model)>, Box<dyn Error>> {
+    use DataPopulateMsg::*;
 
     let root = &args.root.clone();
 
     // Channels for the main pipeline
-    let (entry_point_snd, load_requests_rcv) = channel::bounded::<PipelineMessage>(CAPACITY);
-    let (parse_requests_snd, parse_requests_rcv) = channel::bounded::<PipelineMessage>(CAPACITY);
-    let (cli_requests_snd, cli_requests_rcv) = channel::bounded::<PipelineMessage>(CAPACITY);
-    let (loc_requests_snd, loc_requests_rcv) = channel::bounded::<PipelineMessage>(CAPACITY);
-    let (comp_notify_snd, comp_notify_rcv) = channel::bounded::<PipelineMessage>(CAPACITY);
+    let (entry_point_snd, load_requests_rcv) = channel::bounded::<DataPopulateMsg>(CAPACITY);
+    let (parse_requests_snd, parse_requests_rcv) = channel::bounded::<DataPopulateMsg>(CAPACITY);
+    let (cli_requests_snd, cli_requests_rcv) = channel::bounded::<DataPopulateMsg>(CAPACITY);
+    let (loc_requests_snd, loc_requests_rcv) = channel::bounded::<DataPopulateMsg>(CAPACITY);
+    let (comp_notify_snd, comp_notify_rcv) = channel::bounded::<DataPopulateMsg>(CAPACITY);
 
     // Channel for adding stats to the climo database
     let (stats_snd, stats_rcv) = channel::bounded::<StatsRecord>(CAPACITY);
@@ -46,13 +45,16 @@ pub(crate) fn build_climo(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
 
     let loc_stats_jh = start_location_stats_thread(loc_requests_rcv, comp_notify_snd, stats_snd)?;
 
+    let mut site_model_pairs = HashSet::new();
+
     // Monitor progress and post updates here
     let mut pb = ProgressBar::new(total_num as u64);
     let arch = Archive::connect(root)?;
     for msg in comp_notify_rcv {
         match msg {
-            Completed { num } => {
+            PopulateCompleted { num, site, model } => {
                 pb.set(num as u64);
+                site_model_pairs.insert((site, model));
             }
             DataError {
                 num,
@@ -78,25 +80,35 @@ pub(crate) fn build_climo(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
             }
         }
     }
+
     pb.finish();
 
-    println!("Waiting for service threads to shut down.");
-    ep_jh.join().expect("Error joining thread.")?;
-    load_jh.join().expect("Error joining thread.")?;
-    parser_jh.join().expect("Error joining thread.")?;
-    cli_stats_jh.join().expect("Error joining thread.")?;
-    loc_stats_jh.join().expect("Error joining thread.")?;
-    stats_jh.join().expect("Error joining thread.")?;
-    println!("Done.");
+    println!("Waiting for populate service threads to shut down.");
+    ep_jh.join().expect("Error joining entry point thread.")?;
+    load_jh.join().expect("Error joining load thread.")?;
+    parser_jh.join().expect("Error joining parsing thread.")?;
+    cli_stats_jh
+        .join()
+        .expect("Error joining cli_stats thread.")?;
+    loc_stats_jh
+        .join()
+        .expect("Error joining location thread.")?;
+    stats_jh.join().expect("Error joining stats thread.")?;
+    println!("Done populating climate data.");
 
-    Ok(())
+    Ok(site_model_pairs)
 }
 
-#[allow(clippy::type_complexity)]
+// A join handle for the entry point thread, which returns and error with a string or nothing. It
+// is also packaged with the total count of soundings that need to be possibly added to the
+// archive index. Some (many) will likely already be there and can be skipped, but we need to
+// check each and every one.
+type EntryPointData = (JoinHandle<Result<(), String>>, i64);
+
 fn start_entry_point_thread(
     args: CmdLineArgs,
-    entry_point_snd: Sender<PipelineMessage>,
-) -> Result<(JoinHandle<Result<(), String>>, i64), Box<dyn Error>> {
+    entry_point_snd: Sender<DataPopulateMsg>,
+) -> Result<EntryPointData, Box<dyn Error>> {
     let arch = Archive::connect(&args.root)?;
     let sites = args
         .sites
@@ -117,7 +129,7 @@ fn start_entry_point_thread(
 
             let climo_db = ClimoDB::connect_or_create(&args.root).map_err(|err| err.to_string())?;
             let mut climo_db =
-                ClimoBuilderInterface::initialize(&climo_db).map_err(|err| err.to_string())?;
+                ClimoPopulateInterface::initialize(&climo_db).map_err(|err| err.to_string())?;
 
             let mut counter = 0;
             for (site, &model) in iproduct!(&sites, &args.models) {
@@ -141,7 +153,7 @@ fn start_entry_point_thread(
                     counter += 1;
                     small_counter += 1;
 
-                    let message = PipelineMessage::Load {
+                    let message = DataPopulateMsg::Load {
                         model,
                         init_time,
                         site: site.clone(),
@@ -163,8 +175,8 @@ fn start_entry_point_thread(
 
 fn start_load_thread(
     root: &Path,
-    load_requests_rcv: Receiver<PipelineMessage>,
-    parse_requests_snd: Sender<PipelineMessage>,
+    load_requests_rcv: Receiver<DataPopulateMsg>,
+    parse_requests_snd: Sender<DataPopulateMsg>,
 ) -> Result<JoinHandle<Result<(), String>>, Box<dyn Error>> {
     let root = root.to_path_buf();
 
@@ -175,20 +187,20 @@ fn start_load_thread(
 
             for load_req in load_requests_rcv {
                 let message = match load_req {
-                    PipelineMessage::Load {
+                    DataPopulateMsg::Load {
                         num,
                         site,
                         model,
                         init_time,
                     } => match arch.retrieve(&site.id, model, init_time) {
-                        Ok(data) => PipelineMessage::Parse {
+                        Ok(data) => DataPopulateMsg::Parse {
                             num,
                             site,
                             model,
                             init_time,
                             data,
                         },
-                        Err(err) => PipelineMessage::DataError {
+                        Err(err) => DataPopulateMsg::DataError {
                             num,
                             site,
                             model,
@@ -210,14 +222,14 @@ fn start_load_thread(
 }
 
 fn start_parser_thread(
-    parse_requests: Receiver<PipelineMessage>,
-    cli_requests: Sender<PipelineMessage>,
+    parse_requests: Receiver<DataPopulateMsg>,
+    cli_requests: Sender<DataPopulateMsg>,
 ) -> Result<JoinHandle<Result<(), String>>, Box<dyn Error>> {
     let jh = thread::Builder::new()
         .name("SoundingParser".to_string())
         .spawn(move || -> Result<(), String> {
             for msg in parse_requests {
-                if let PipelineMessage::Parse {
+                if let DataPopulateMsg::Parse {
                     num,
                     site,
                     model,
@@ -228,7 +240,7 @@ fn start_parser_thread(
                     let bufkit_data = match BufkitData::init(&data, "") {
                         Ok(bufkit_data) => bufkit_data,
                         Err(err) => {
-                            let message = PipelineMessage::DataError {
+                            let message = DataPopulateMsg::DataError {
                                 num,
                                 site,
                                 model,
@@ -243,11 +255,11 @@ fn start_parser_thread(
                     for (snd, _) in bufkit_data.into_iter().take_while(|(snd, _)| {
                         snd.lead_time()
                             .into_option()
-                            .and_then(|lt| Some(i64::from(lt) < model.hours_between_runs()))
+                            .map(|lt| i64::from(lt) < model.hours_between_runs())
                             .unwrap_or(false)
                     }) {
                         if let Some(valid_time) = snd.valid_time() {
-                            let message = PipelineMessage::CliData {
+                            let message = DataPopulateMsg::CliData {
                                 num,
                                 site: site.clone(),
                                 model,
@@ -256,7 +268,7 @@ fn start_parser_thread(
                             };
                             cli_requests.send(message).map_err(|err| err.to_string())?;
                         } else {
-                            let message = PipelineMessage::DataError {
+                            let message = DataPopulateMsg::DataError {
                                 num,
                                 site: site.clone(),
                                 model,
@@ -278,14 +290,14 @@ fn start_parser_thread(
 }
 
 fn start_cli_stats_thread(
-    cli_requests: Receiver<PipelineMessage>,
-    location_requests: Sender<PipelineMessage>,
+    cli_requests: Receiver<DataPopulateMsg>,
+    location_requests: Sender<DataPopulateMsg>,
     climo_update_requests: Sender<StatsRecord>,
 ) -> Result<JoinHandle<Result<(), String>>, Box<dyn Error>> {
     let jh = thread::Builder::new()
         .name("CliStatsBuilder".to_string())
         .spawn(move || -> Result<(), String> {
-            const POOL_SIZE: usize = 6;
+            const POOL_SIZE: usize = 12;
 
             let pool = threadpool::Builder::new()
                 .num_threads(POOL_SIZE)
@@ -299,7 +311,7 @@ fn start_cli_stats_thread(
 
                 pool.execute(move || {
                     for msg in local_cli_requests {
-                        if let PipelineMessage::CliData {
+                        if let DataPopulateMsg::CliData {
                             num,
                             site,
                             model,
@@ -319,7 +331,7 @@ fn start_cli_stats_thread(
                                     .expect("Error sending message.");
                             }
 
-                            let message = PipelineMessage::Location {
+                            let message = DataPopulateMsg::Location {
                                 num,
                                 site,
                                 model,
@@ -347,15 +359,15 @@ fn start_cli_stats_thread(
 }
 
 fn start_location_stats_thread(
-    location_requests: Receiver<PipelineMessage>,
-    completed_notification: Sender<PipelineMessage>,
+    location_requests: Receiver<DataPopulateMsg>,
+    completed_notification: Sender<DataPopulateMsg>,
     climo_update_requests: Sender<StatsRecord>,
 ) -> Result<JoinHandle<Result<(), String>>, Box<dyn Error>> {
     let jh = thread::Builder::new()
         .name("LocationUpdater".to_string())
         .spawn(move || -> Result<(), String> {
             for msg in location_requests {
-                if let PipelineMessage::Location {
+                if let DataPopulateMsg::Location {
                     num,
                     site,
                     model,
@@ -369,18 +381,23 @@ fn start_location_stats_thread(
                         .map(|lt| lt == 0)
                         .unwrap_or(true)
                     {
-                        match StatsRecord::create_location_data(site, model, valid_time, &snd) {
+                        match StatsRecord::create_location_data(
+                            site.clone(),
+                            model,
+                            valid_time,
+                            &snd,
+                        ) {
                             Ok(msg) => {
                                 climo_update_requests
                                     .send(msg)
                                     .map_err(|err| err.to_string())?;
 
                                 completed_notification
-                                    .send(PipelineMessage::Completed { num })
+                                    .send(DataPopulateMsg::PopulateCompleted { num, site, model })
                                     .map_err(|err| err.to_string())?;
                             }
                             Err(site) => {
-                                let message = PipelineMessage::DataError {
+                                let message = DataPopulateMsg::DataError {
                                     num,
                                     site,
                                     model,
@@ -417,7 +434,7 @@ fn start_stats_thread(
         .spawn(move || -> Result<(), String> {
             let climo_db = ClimoDB::connect_or_create(&root).map_err(|err| err.to_string())?;
             let mut climo_db =
-                ClimoBuilderInterface::initialize(&climo_db).map_err(|err| err.to_string())?;
+                ClimoPopulateInterface::initialize(&climo_db).map_err(|err| err.to_string())?;
 
             for msg in stats_rcv {
                 climo_db.add(msg).map_err(|err| err.to_string())?;
@@ -430,7 +447,7 @@ fn start_stats_thread(
 }
 
 #[derive(Debug)]
-enum PipelineMessage {
+enum DataPopulateMsg {
     Load {
         num: usize,
         site: Site,
@@ -458,8 +475,10 @@ enum PipelineMessage {
         valid_time: NaiveDateTime,
         snd: Box<Sounding>,
     },
-    Completed {
+    PopulateCompleted {
         num: usize,
+        site: Site,
+        model: Model,
     },
     DataError {
         num: usize,

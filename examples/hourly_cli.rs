@@ -1,7 +1,6 @@
-use bufcli::{ClimoDB, ClimoElement, ClimoQueryInterface, HourlyDeciles};
+use bufcli::{ClimoDB, ClimoElement, ClimoQueryInterface, CumulativeDistribution, Percentile};
 use bufkit_data::Site;
-use chrono::NaiveDate;
-use itertools::izip;
+use chrono::{NaiveDate, NaiveDateTime};
 use std::{
     error::Error,
     fs::File,
@@ -29,11 +28,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let start_time = NaiveDate::from_ymd(2017, 8, 28).and_hms(12, 0, 0);
     let end_time = NaiveDate::from_ymd(2017, 9, 5).and_hms(12, 0, 0);
 
-    let HourlyDeciles {
-        element,
-        valid_times,
-        deciles,
-    } = climo_db.hourly_deciles(&site, model, element, start_time, end_time)?;
+    let cdfs: Vec<(NaiveDateTime, CumulativeDistribution)> =
+        climo_db.hourly_cdfs(&site, model, element, start_time, end_time)?;
 
     // Output into a file
     let mut output = BufWriter::new(File::create("hourly_deciles.txt")?);
@@ -43,22 +39,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         "valid_time min 10th 20th 30th 40th median 60th 70th 80th 90th max"
     )?;
 
-    for (vt, deciles) in izip!(valid_times, deciles) {
+    for (vt, cdf) in cdfs {
         writeln!(
             output,
             "{} {} {} {} {} {} {} {} {} {} {} {}",
             vt.format("%Y-%m-%d-%H"),
-            deciles[0],
-            deciles[1],
-            deciles[2],
-            deciles[3],
-            deciles[4],
-            deciles[5],
-            deciles[6],
-            deciles[7],
-            deciles[8],
-            deciles[9],
-            deciles[10],
+            cdf.value_at_percentile(Percentile::from(0)),
+            cdf.value_at_percentile(Percentile::from(10)),
+            cdf.value_at_percentile(Percentile::from(20)),
+            cdf.value_at_percentile(Percentile::from(30)),
+            cdf.value_at_percentile(Percentile::from(40)),
+            cdf.value_at_percentile(Percentile::from(50)),
+            cdf.value_at_percentile(Percentile::from(60)),
+            cdf.value_at_percentile(Percentile::from(70)),
+            cdf.value_at_percentile(Percentile::from(80)),
+            cdf.value_at_percentile(Percentile::from(90)),
+            cdf.value_at_percentile(Percentile::from(100)),
         )?;
     }
 
