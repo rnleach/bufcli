@@ -71,7 +71,7 @@ fn start_deciles_builder(
                 // Make a pool of threads that take a vec and build a CDF distribution out of them
                 let pool = threadpool::Builder::new()
                     .num_threads(POOL_SIZE)
-                    .thread_name("CDFBuilder".to_string())
+                    .thread_name("DecilesBuilder".to_string())
                     .build();
 
                 for _ in 0..POOL_SIZE {
@@ -127,10 +127,6 @@ fn start_deciles_builder(
                 let mut climo_db = ClimoCDFBuilderInterface::initialize(&climo_db)
                     .map_err(|err| err.to_string())?;
 
-                climo_db
-                    .begin_transaction()
-                    .map_err(|err| err.to_string())?;
-
                 for msg in db_add_receiver {
                     if let DecilesBuilderMsg::CDFDBAdd { site, model, cdfs } = msg {
                         for (day_of_year, hour, hdw, dt, meters, dcape) in cdfs.into_iter() {
@@ -151,10 +147,6 @@ fn start_deciles_builder(
                         to_main.send(msg).map_err(|err| err.to_string())?;
                     }
                 }
-
-                climo_db
-                    .commit_transaction()
-                    .map_err(|err| err.to_string())?;
 
                 Ok(())
             })?;

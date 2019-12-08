@@ -11,11 +11,25 @@ pub struct ClimoCDFBuilderInterface<'a, 'b: 'a> {
     climo_db: &'b ClimoDB,
     add_cdf_query: Statement<'a>,
     all_data_query: Statement<'a>,
+    buffer: Vec<Record>,
+}
+
+struct Record {
+    site: Site,
+    model: Model,
+    day_of_year: u32,
+    hour: u32,
+    hdw_dist: Deciles,
+    dt_dist: Deciles,
+    meters_dist: Deciles,
+    dcape_dist: Deciles,
 }
 
 /// A collection of data values. Each tuple is
 /// (valid time, hdw, blow up dt, blow up meters, dcape)
 pub type AllData = Vec<(NaiveDateTime, f64, f64, f64, f64)>;
+
+const BUFSIZE: usize = 100;
 
 impl<'a, 'b> ClimoCDFBuilderInterface<'a, 'b> {
     /// Initialize the interface.
@@ -31,6 +45,7 @@ impl<'a, 'b> ClimoCDFBuilderInterface<'a, 'b> {
             climo_db,
             add_cdf_query,
             all_data_query,
+            buffer: Vec::with_capacity(BUFSIZE),
         })
     }
 
@@ -73,40 +88,21 @@ impl<'a, 'b> ClimoCDFBuilderInterface<'a, 'b> {
         hour: u32,
         (hdw_dist, dt_dist, meters_dist, dcape_dist): (Deciles, Deciles, Deciles, Deciles),
     ) -> Result<(), Box<dyn Error>> {
-        let hdw_dist = hdw_dist.as_bytes()?;
-        let dt_dist = dt_dist.as_bytes()?;
-        let meters_dist = meters_dist.as_bytes()?;
-        let dcape_dist = dcape_dist.as_bytes()?;
-
-        self.add_cdf_query.execute(params![
-            site.id,
-            model.as_static_str(),
+        self.buffer.push(Record {
+            site: site.clone(),
+            model,
             day_of_year,
             hour,
             hdw_dist,
             dt_dist,
             meters_dist,
-            dcape_dist
-        ])?;
+            dcape_dist,
+        });
 
-        Ok(())
-    }
+        if self.buffer.len() >= BUFSIZE {
+            self.flush()?;
+        }
 
-    /// Start a transaction, this must be paired with a commit. If doing several add/updates, then
-    /// this can speed things up considerably.
-    pub fn begin_transaction(&mut self) -> Result<(), Box<dyn Error>> {
-        self.climo_db
-            .stats_conn
-            .execute("BEGIN TRANSACTION", NO_PARAMS)?;
-        Ok(())
-    }
-
-    /// Commit a transaction, this must be paired with a begin. If doing several add/updates, then
-    /// this can speed things up considerably.
-    pub fn commit_transaction(&mut self) -> Result<(), Box<dyn Error>> {
-        self.climo_db
-            .stats_conn
-            .execute("COMMIT TRANSACTION", NO_PARAMS)?;
         Ok(())
     }
 
@@ -168,6 +164,36 @@ impl<'a, 'b> ClimoCDFBuilderInterface<'a, 'b> {
         }
 
         to_ret
+    }
+
+    fn flush(&mut self) -> Result<(), Box<dyn Error>> {
+        self.climo_db
+            .stats_conn
+            .execute("BEGIN TRANSACTION", NO_PARAMS)?;
+
+        for record in self.buffer.drain(..) {
+            self.add_cdf_query.execute(params![
+                record.site.id,
+                record.model.as_static_str(),
+                record.day_of_year,
+                record.hour,
+                record.hdw_dist.as_bytes()?,
+                record.dt_dist.as_bytes()?,
+                record.meters_dist.as_bytes()?,
+                record.dcape_dist.as_bytes()?,
+            ])?;
+        }
+
+        self.climo_db
+            .stats_conn
+            .execute("COMMIT TRANSACTION", NO_PARAMS)?;
+        Ok(())
+    }
+}
+
+impl<'a, 'b> Drop for ClimoCDFBuilderInterface<'a, 'b> {
+    fn drop(&mut self) {
+        self.flush().unwrap();
     }
 }
 
