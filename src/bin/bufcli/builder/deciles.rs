@@ -76,7 +76,7 @@ fn start_deciles_builder(
     let local_to_main = to_main.clone();
     thread::Builder::new()
         .name("CDFMaster".into())
-        .spawn(move || -> () {
+        .spawn(move || {
             const POOL_SIZE: usize = 12;
 
             let to_main = local_to_main;
@@ -126,7 +126,7 @@ fn start_deciles_builder(
     let local_root = root.to_path_buf();
     thread::Builder::new()
         .name("CDFDbAdder".into())
-        .spawn(move || -> () {
+        .spawn(move || {
             let climo_db = assign_or_bail!(ClimoDB::connect_or_create(&local_root), to_main);
             let mut climo_db =
                 assign_or_bail!(ClimoCDFBuilderInterface::initialize(&climo_db), to_main);
@@ -134,7 +134,7 @@ fn start_deciles_builder(
             for msg in db_add_receiver {
                 if let DecilesBuilderMsg::CDFDBAdd { site, model, cdfs } = msg {
                     for (day_of_year, hour, hdw, dt, meters, dcape) in cdfs.into_iter() {
-                        let _ = assign_or_bail!(
+                        assign_or_bail!(
                             climo_db.add_to_db(
                                 &site,
                                 model,

@@ -129,7 +129,7 @@ fn start_entry_point_thread(
 
     thread::Builder::new()
         .name("Generator".to_string())
-        .spawn(move || -> () {
+        .spawn(move || {
             let force_rebuild = args.operation == "build";
 
             let arch = assign_or_bail!(Archive::connect(&args.root), entry_point_snd);
@@ -183,7 +183,7 @@ fn start_load_thread(
 
     thread::Builder::new()
         .name("FileLoader".to_string())
-        .spawn(move || -> () {
+        .spawn(move || {
             let arch = assign_or_bail!(Archive::connect(root), parse_requests_snd);
 
             for load_req in load_requests_rcv {
@@ -214,7 +214,6 @@ fn start_load_thread(
 
                 send_or_bail!(message, parse_requests_snd);
             }
-            ()
         })?;
 
     Ok(())
@@ -226,7 +225,7 @@ fn start_parser_thread(
 ) -> Result<(), Box<dyn Error>> {
     thread::Builder::new()
         .name("SoundingParser".to_string())
-        .spawn(move || -> () {
+        .spawn(move || {
             for msg in parse_requests {
                 if let DataPopulateMsg::Parse {
                     num,
@@ -294,7 +293,7 @@ fn start_cli_stats_thread(
 ) -> Result<(), Box<dyn Error>> {
     thread::Builder::new()
         .name("CliStatsBuilder".to_string())
-        .spawn(move || -> () {
+        .spawn(move || {
             const POOL_SIZE: usize = 12;
 
             let pool = threadpool::Builder::new()
@@ -355,7 +354,7 @@ fn start_location_stats_thread(
 ) -> Result<(), Box<dyn Error>> {
     thread::Builder::new()
         .name("LocationUpdater".to_string())
-        .spawn(move || -> () {
+        .spawn(move || {
             for msg in location_requests {
                 if let DataPopulateMsg::Location {
                     num,
@@ -400,8 +399,6 @@ fn start_location_stats_thread(
                     send_or_bail!(msg, completed_notification);
                 }
             }
-
-            ()
         })?;
 
     Ok(())
@@ -416,7 +413,7 @@ fn start_stats_thread(
 
     thread::Builder::new()
         .name("ClimoWriter".to_string())
-        .spawn(move || -> () {
+        .spawn(move || {
             let climo_db = assign_or_bail!(ClimoDB::connect_or_create(&root), comp_notify_snd);
             let mut climo_db = assign_or_bail!(
                 ClimoPopulateInterface::initialize(&climo_db),
@@ -424,7 +421,7 @@ fn start_stats_thread(
             );
 
             for msg in stats_rcv {
-                let _ = assign_or_bail!(climo_db.add(msg), comp_notify_snd);
+                assign_or_bail!(climo_db.add(msg), comp_notify_snd);
             }
 
             comp_notify_snd
