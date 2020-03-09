@@ -53,7 +53,7 @@ pub(crate) struct CmdLineArgs {
 
 fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
     let app = App::new("bufcli")
-        .author("Ryan Leach <clumsycodemonkey@gmail.com>")
+        .author("Ryan <rnleach@users.noreply.github.com>")
         .version(crate_version!())
         .about("Model sounding climatology.")
         .arg(
