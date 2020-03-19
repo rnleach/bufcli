@@ -13,7 +13,7 @@ use std::{
     error::Error,
     iter::FromIterator,
     path::Path,
-    thread::{self},
+    thread::{self, JoinHandle},
 };
 use threadpool;
 
@@ -33,7 +33,7 @@ pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(Site, Model)>, Box<dyn
     let (stats_snd, stats_rcv) = channel::bounded::<StatsRecord>(CAPACITY);
 
     // Hook everything together
-    start_stats_thread(root, stats_rcv, comp_notify_snd.clone())?;
+    let stats_jh = start_stats_thread(root, stats_rcv, comp_notify_snd.clone())?;
     let total_num = start_entry_point_thread(args, entry_point_snd)?;
     start_load_thread(root, load_requests_rcv, parse_requests_snd)?;
     start_parser_thread(parse_requests_rcv, cli_requests_snd)?;
@@ -79,6 +79,9 @@ pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(Site, Model)>, Box<dyn
             }
         }
     }
+
+    // Let stats drop implementation release the database and commit all changes.
+    stats_jh.join().unwrap();
 
     Ok(site_model_pairs)
 }
@@ -408,10 +411,10 @@ fn start_stats_thread(
     root: &Path,
     stats_rcv: Receiver<StatsRecord>,
     comp_notify_snd: Sender<DataPopulateMsg>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<JoinHandle<()>, Box<dyn Error + 'static>> {
     let root = root.to_path_buf();
 
-    thread::Builder::new()
+    let jh = thread::Builder::new()
         .name("ClimoWriter".to_string())
         .spawn(move || {
             let climo_db = assign_or_bail!(ClimoDB::connect_or_create(&root), comp_notify_snd);
@@ -429,7 +432,7 @@ fn start_stats_thread(
                 .expect("Error sending terminate thread.");
         })?;
 
-    Ok(())
+    Ok(jh)
 }
 
 #[derive(Debug)]
