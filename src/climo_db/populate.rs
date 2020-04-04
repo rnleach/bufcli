@@ -68,59 +68,67 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
         self.climo_db.conn.execute("BEGIN TRANSACTION", NO_PARAMS)?;
 
         for record in self.write_buffer.drain(..) {
-            match record {
-                CliData {
-                    site,
-                    model,
-                    valid_time,
-                    hdw,
-                    blow_up_dt,
-                    blow_up_meters,
-                    dcape,
-                } => {
-                    let lcl_time = site
-                        .time_zone
-                        .unwrap_or_else(|| FixedOffset::west(0))
-                        .from_utc_datetime(&valid_time);
-                    let year_lcl = lcl_time.year();
-                    let month_lcl = lcl_time.month();
-                    let day_lcl = lcl_time.day();
-                    let hour_lcl = lcl_time.hour();
+            if let Err(err) = {
+                match record {
+                    CliData {
+                        site,
+                        model,
+                        valid_time,
+                        hdw,
+                        blow_up_dt,
+                        blow_up_meters,
+                        dcape,
+                    } => {
+                        let lcl_time = site
+                            .time_zone
+                            .unwrap_or_else(|| FixedOffset::west(0))
+                            .from_utc_datetime(&valid_time);
+                        let year_lcl = lcl_time.year();
+                        let month_lcl = lcl_time.month();
+                        let day_lcl = lcl_time.day();
+                        let hour_lcl = lcl_time.hour();
 
-                    self.add_data_query
+                        self.add_data_query
+                            .execute(&[
+                                &site.id as &dyn ToSql,
+                                &model.as_static_str(),
+                                &valid_time as &dyn ToSql,
+                                &year_lcl as &dyn ToSql,
+                                &month_lcl as &dyn ToSql,
+                                &day_lcl as &dyn ToSql,
+                                &hour_lcl as &dyn ToSql,
+                                &hdw as &dyn ToSql,
+                                &blow_up_dt as &dyn ToSql,
+                                &blow_up_meters as &dyn ToSql,
+                                &dcape as &dyn ToSql,
+                            ])
+                            .map(|_| ())
+                    }
+                    Location {
+                        site,
+                        model,
+                        valid_time,
+                        lat,
+                        lon,
+                        elev_m,
+                    } => self
+                        .add_location_query
                         .execute(&[
                             &site.id as &dyn ToSql,
                             &model.as_static_str(),
                             &valid_time as &dyn ToSql,
-                            &year_lcl as &dyn ToSql,
-                            &month_lcl as &dyn ToSql,
-                            &day_lcl as &dyn ToSql,
-                            &hour_lcl as &dyn ToSql,
-                            &hdw as &dyn ToSql,
-                            &blow_up_dt as &dyn ToSql,
-                            &blow_up_meters as &dyn ToSql,
-                            &dcape as &dyn ToSql,
+                            &lat as &dyn ToSql,
+                            &lon as &dyn ToSql,
+                            &elev_m as &dyn ToSql,
                         ])
-                        .map(|_| ())?
+                        .map(|_| ()),
                 }
-                Location {
-                    site,
-                    model,
-                    valid_time,
-                    lat,
-                    lon,
-                    elev_m,
-                } => self
-                    .add_location_query
-                    .execute(&[
-                        &site.id as &dyn ToSql,
-                        &model.as_static_str(),
-                        &valid_time as &dyn ToSql,
-                        &lat as &dyn ToSql,
-                        &lon as &dyn ToSql,
-                        &elev_m as &dyn ToSql,
-                    ])
-                    .map(|_| ())?,
+            } {
+                eprintln!("Error adding data to database: {}", err);
+                self.climo_db
+                    .conn
+                    .execute("COMMIT TRANSACTION", NO_PARAMS)?;
+                Err(err)?;
             }
         }
 
