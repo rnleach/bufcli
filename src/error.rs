@@ -19,3 +19,10 @@ impl BufcliError {
         BufcliError { msg }
     }
 }
+
+impl From<&'static str> for BufcliError {
+
+    fn from(msg: &'static str) -> Self {
+        BufcliError {msg}
+    }
+}

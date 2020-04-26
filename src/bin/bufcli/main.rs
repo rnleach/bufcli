@@ -4,11 +4,7 @@
 //! archive. These can be queried later by other tools to provide context to any given analysis.
 mod builder;
 
-use self::builder::build_climo;
-use bufcli::ClimoDB;
-use bufkit_data::{Archive, Model};
-use clap::{crate_version, App, Arg};
-use dirs::home_dir;
+use bufkit_data::Model;
 use std::{error::Error, path::PathBuf, str::FromStr};
 use strum::IntoEnumIterator;
 
@@ -36,8 +32,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     let args = parse_args()?;
 
     match args.operation.as_ref() {
-        "build" => build_climo(args),
-        "update" => build_climo(args),
+        "build" => builder::build_climo(args),
+        "update" => builder::build_climo(args),
         "reset" => reset(args),
         _ => bail("Unknown operation."),
     }
@@ -52,12 +48,12 @@ pub(crate) struct CmdLineArgs {
 }
 
 fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
-    let app = App::new("bufcli")
+    let app = clap::App::new("bufcli")
         .author("Ryan <rnleach@users.noreply.github.com>")
-        .version(crate_version!())
+        .version(clap::crate_version!())
         .about("Model sounding climatology.")
         .arg(
-            Arg::with_name("sites")
+            clap::Arg::with_name("sites")
                 .multiple(true)
                 .short("s")
                 .long("sites")
@@ -65,7 +61,7 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
                 .help("Site identifiers (e.g. kord, katl, smn)."),
         )
         .arg(
-            Arg::with_name("models")
+            clap::Arg::with_name("models")
                 .multiple(true)
                 .short("m")
                 .long("models")
@@ -82,7 +78,7 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
                 )),
         )
         .arg(
-            Arg::with_name("root")
+            clap::Arg::with_name("root")
                 .short("r")
                 .long("root")
                 .takes_value(true)
@@ -94,7 +90,7 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
                 .global(true),
         )
         .arg(
-            Arg::with_name("operation")
+            clap::Arg::with_name("operation")
                 .index(1)
                 .takes_value(true)
                 .required(true)
@@ -112,11 +108,11 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
     let root = matches
         .value_of("root")
         .map(PathBuf::from)
-        .or_else(|| home_dir().map(|hd| hd.join("bufkit")))
+        .or_else(|| dirs::home_dir().map(|hd| hd.join("bufkit")))
         .expect("Invalid root.");
     let root_clone = root.clone();
 
-    let arch = match Archive::connect(root) {
+    let arch = match bufkit_data::Archive::connect(root) {
         arch @ Ok(_) => arch,
         err @ Err(_) => {
             println!("Unable to connect to db, printing error and exiting.");
@@ -156,5 +152,5 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
 }
 
 fn reset(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
-    ClimoDB::delete_climo_db(&args.root)
+    bufcli::ClimoDB::delete_climo_db(&args.root)
 }

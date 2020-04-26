@@ -53,6 +53,8 @@ impl CumulativeDistribution {
     }
 
     pub fn percentile_of_value(&self, value: f64) -> Percentile {
+        assert!(!value.is_nan());
+
         let index: usize = self
             .sorted_values
             .binary_search_by(|&probe| probe.partial_cmp(&value).unwrap())
@@ -90,6 +92,9 @@ impl CumulativeDistribution {
 }
 
 impl Deciles {
+
+    // Serialize and deserialize Deciles for storing in a database. 
+
     pub(crate) fn as_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
         bincode::serialize(self).map_err(Into::into)
     }
