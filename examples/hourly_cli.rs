@@ -1,4 +1,4 @@
-use bufcli::{ClimoDB, ClimoElement, ClimoQueryInterface, CumulativeDistribution, Percentile};
+use bufcli::{ClimoDB, ClimoElement, ClimoQueryInterface, Deciles, Percentile};
 use bufkit_data::Site;
 use chrono::{NaiveDate, NaiveDateTime};
 use std::{
@@ -13,7 +13,7 @@ const ARCHIVE_ROOT: &str = "/home/ryan/bufkit/";
 fn main() -> Result<(), Box<dyn Error>> {
     let pth = Path::new(ARCHIVE_ROOT);
     let climo_db = ClimoDB::connect_or_create(pth)?;
-    let mut climo_db = ClimoQueryInterface::initialize(&climo_db);
+    let mut climo_db = ClimoQueryInterface::initialize(&climo_db)?;
 
     let site = Site {
         id: "KMSO".to_owned(),
@@ -28,8 +28,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let start_time = NaiveDate::from_ymd(2017, 8, 28).and_hms(12, 0, 0);
     let end_time = NaiveDate::from_ymd(2017, 9, 5).and_hms(12, 0, 0);
 
-    let cdfs: Vec<(NaiveDateTime, CumulativeDistribution)> =
-        climo_db.hourly_cdfs(&site, model, element, start_time, end_time)?;
+    let cdfs: Vec<(NaiveDateTime, Deciles)> =
+        climo_db.hourly_deciles(&site, model, element, start_time, end_time)?;
 
     // Output into a file
     let mut output = BufWriter::new(File::create("hourly_deciles.txt")?);
