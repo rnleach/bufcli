@@ -1,6 +1,6 @@
 INSERT OR REPLACE INTO
 cli (
-		site,
+		station_num,
 		model,
 
 		valid_time,
@@ -10,8 +10,8 @@ cli (
 		hour_lcl,
 
 		hdw,
-		blow_up_dt,
-		blow_up_meters,
+		el_blow_up_dt,
+		el_blow_up_meters,
 
         dcape
 	)

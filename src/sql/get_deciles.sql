@@ -3,4 +3,4 @@ SELECT
     hour_of_day,
     rowid
 FROM deciles
-WHERE site = ?1 and model = ?2
+WHERE station_num = ?1 and model = ?2

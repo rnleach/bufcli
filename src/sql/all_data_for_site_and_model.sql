@@ -1,8 +1,8 @@
 SELECT 
     valid_time,
     hdw,
-    blow_up_dt,
-    blow_up_meters,
+    el_blow_up_dt,
+    el_blow_up_meters,
     dcape 
 FROM cli
-WHERE site = ?1 and model = ?2
+WHERE station_num = ?1 and model = ?2
