@@ -1,5 +1,5 @@
 use rusqlite::{Connection, OpenFlags};
-use std::{error::Error, fs::create_dir, path::Path};
+use std::{error::Error, path::Path};
 
 pub struct ClimoDB {
     conn: Connection,
@@ -22,7 +22,7 @@ impl ClimoDB {
     pub fn connect_or_create(arch_root: &Path) -> Result<Self, Box<dyn Error>> {
         let climo_path = arch_root.join(Self::CLIMO_DIR);
         if !climo_path.is_dir() {
-            create_dir(&climo_path)?;
+            std::fs::create_dir(&climo_path)?;
         }
 
         let data_file = climo_path.join(Self::CLIMO_DB);
