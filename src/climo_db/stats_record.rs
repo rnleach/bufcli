@@ -41,7 +41,9 @@ impl StatsRecord {
         let (blow_up_dt, blow_up_meters): (Option<f64>, Option<i32>) = match blow_up(snd, None) {
             Err(_) => (None, None),
             Ok(BlowUpAnalysis {
-                delta_t_el, delta_z_el, ..
+                delta_t_el,
+                delta_z_el,
+                ..
             }) => (
                 Some(delta_t_el.unpack()),
                 Some(delta_z_el.unpack()).map(|h| h as i32),
