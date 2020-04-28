@@ -92,8 +92,7 @@ impl CumulativeDistribution {
 }
 
 impl Deciles {
-
-    // Serialize and deserialize Deciles for storing in a database. 
+    // Serialize and deserialize Deciles for storing in a database.
 
     pub(crate) fn as_bytes(&self) -> Result<Vec<u8>, Box<dyn Error>> {
         bincode::serialize(self).map_err(Into::into)

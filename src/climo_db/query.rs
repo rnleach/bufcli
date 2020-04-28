@@ -1,14 +1,12 @@
 use super::{ClimoDB, ClimoElement};
 use crate::distributions::Deciles;
-use bufkit_data::Site;
-use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime};
-use rusqlite::{params, DatabaseName, Statement};
+use chrono::Datelike;
 use std::error::Error;
 
 /// This struct creates and caches several statements for querying the database.
 pub struct ClimoQueryInterface<'a, 'b: 'a> {
     climo_db: &'b ClimoDB,
-    deciles_statement: Statement<'a>,
+    deciles_statement: rusqlite::Statement<'a>,
 }
 
 impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
@@ -27,14 +25,14 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
     /// Retrieve hourly `Deciles`s
     pub fn hourly_deciles(
         &mut self,
-        site: &Site,
+        site: &bufkit_data::Site,
         model: &str,
         element: ClimoElement,
-        start_time: NaiveDateTime,
-        end_time: NaiveDateTime,
-    ) -> Result<Vec<(NaiveDateTime, Deciles)>, Box<dyn Error>> {
+        start_time: chrono::NaiveDateTime,
+        end_time: chrono::NaiveDateTime,
+    ) -> Result<Vec<(chrono::NaiveDateTime, Deciles)>, Box<dyn Error>> {
         debug_assert!(end_time > start_time);
-        debug_assert!(end_time - start_time < Duration::days(366));
+        debug_assert!(end_time - start_time < chrono::Duration::days(366));
 
         let start_year = start_time.year();
         let start_day_of_year = start_time.ordinal();
@@ -43,9 +41,9 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
 
         let local_db_conn = &self.climo_db.stats_conn;
 
-        let data: Vec<(NaiveDateTime, Deciles)> = self
+        let data: Vec<(chrono::NaiveDateTime, Deciles)> = self
             .deciles_statement
-            .query_map(params![site.id, model], |row| {
+            .query_map(rusqlite::params![site.id, model], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get(2)?))
             })?
             // Filter out errors
@@ -61,19 +59,19 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
                     unreachable!();
                 };
 
-                let valid_time = NaiveDate::from_yo(year, day_of_year).and_hms(hour, 0, 0);
+                let valid_time = chrono::NaiveDate::from_yo(year, day_of_year).and_hms(hour, 0, 0);
 
                 (valid_time, val)
             })
             // Filter out data that is outside the range I care about
-            .filter(|(valid_time, _val): &(NaiveDateTime, _)| {
+            .filter(|(valid_time, _val): &(chrono::NaiveDateTime, _)| {
                 *valid_time <= end_time && *valid_time >= start_time
             })
             // map the rowid to a decile
             .map(
-                |(valid_time, rowid)| -> Result<(NaiveDateTime, Deciles), Box<dyn Error>> {
+                |(valid_time, rowid)| -> Result<(chrono::NaiveDateTime, Deciles), Box<dyn Error>> {
                     let blob = local_db_conn.blob_open(
-                        DatabaseName::Main,
+                        rusqlite::DatabaseName::Main,
                         "deciles",
                         element.into_column_name(),
                         rowid,

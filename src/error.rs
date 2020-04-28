@@ -21,8 +21,7 @@ impl BufcliError {
 }
 
 impl From<&'static str> for BufcliError {
-
     fn from(msg: &'static str) -> Self {
-        BufcliError {msg}
+        BufcliError { msg }
     }
 }
