@@ -23,7 +23,6 @@ pub enum StatsRecord {
     Location {
         site: SiteInfo,
         model: Model,
-        valid_time: NaiveDateTime,
         lat: f64,
         lon: f64,
         elev_m: f64,
@@ -67,7 +66,6 @@ impl StatsRecord {
     pub fn create_location_data(
         site: SiteInfo,
         model: Model,
-        valid_time: NaiveDateTime,
         snd: &Sounding,
     ) -> Result<Self, SiteInfo> {
         let info = snd.station_info();
@@ -82,7 +80,6 @@ impl StatsRecord {
             Some((lat, lon, elev_m)) => Ok(StatsRecord::Location {
                 site,
                 model,
-                valid_time,
                 lat,
                 lon,
                 elev_m,

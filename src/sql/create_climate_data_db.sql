@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS locations (
     station_num INT  NOT NULL,
     site_name   TEXT NOT NULL,
     model       TEXT NOT NULL,
-    start_date  TEXT NOT NULL,
     latitude    NUM  NOT NULL,
     longitude   NUM  NOT NULL,
     elevation_m NUM  NOT NULL,

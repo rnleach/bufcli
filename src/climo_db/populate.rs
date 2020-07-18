@@ -110,7 +110,6 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                     Location {
                         site,
                         model,
-                        valid_time,
                         lat,
                         lon,
                         elev_m,
@@ -122,7 +121,6 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                                 &Into::<u32>::into(site.station_num) as &dyn ToSql,
                                 &name,
                                 &model.as_static_str(),
-                                &valid_time as &dyn ToSql,
                                 &lat as &dyn ToSql,
                                 &lon as &dyn ToSql,
                                 &elev_m as &dyn ToSql,

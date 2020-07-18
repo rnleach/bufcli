@@ -367,12 +367,7 @@ fn start_location_stats_thread(
                         .map(|lt| lt == 0)
                         .unwrap_or(true)
                     {
-                        match StatsRecord::create_location_data(
-                            site.clone(),
-                            model,
-                            valid_time,
-                            &snd,
-                        ) {
+                        match StatsRecord::create_location_data(site.clone(), model, &snd) {
                             Ok(msg) => {
                                 send_or_bail!(msg, climo_update_requests);
 
