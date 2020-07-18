@@ -45,6 +45,9 @@ impl CumulativeDistribution {
         }
     }
 
+    /// Create a new distribution with pre-sorted data.
+    ///
+    /// # Safety
     /// User must ensure that data contains no NAN values and is sorted in ascending order already.
     pub unsafe fn presorted_new(data: Vec<f64>) -> Self {
         Self {

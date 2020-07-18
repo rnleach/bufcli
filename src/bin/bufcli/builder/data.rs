@@ -1,10 +1,9 @@
 use super::CAPACITY;
 use crate::CmdLineArgs;
 use bufcli::{ClimoDB, ClimoPopulateInterface, StatsRecord};
-use bufkit_data::{Archive, BufkitDataErr, Model, Site};
+use bufkit_data::{Archive, Model, SiteInfo};
 use chrono::NaiveDateTime;
 use crossbeam_channel::{self as channel, Receiver, Sender};
-use itertools::iproduct;
 use pbr::ProgressBar;
 use sounding_analysis::Sounding;
 use sounding_bufkit::BufkitData;
@@ -15,12 +14,11 @@ use std::{
     path::Path,
     thread::{self, JoinHandle},
 };
-use threadpool;
 
-pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(Site, Model)>, Box<dyn Error>> {
+pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(SiteInfo, Model)>, Box<dyn Error>> {
     use DataPopulateMsg::*;
 
-    let root = &args.root.clone();
+    let root = args.root.clone();
 
     // Channels for the main pipeline
     let (entry_point_snd, load_requests_rcv) = channel::bounded::<DataPopulateMsg>(CAPACITY);
@@ -33,9 +31,9 @@ pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(Site, Model)>, Box<dyn
     let (stats_snd, stats_rcv) = channel::bounded::<StatsRecord>(CAPACITY);
 
     // Hook everything together
-    let stats_jh = start_stats_thread(root, stats_rcv, comp_notify_snd.clone())?;
+    let stats_jh = start_stats_thread(&root, stats_rcv, comp_notify_snd.clone())?;
     let total_num = start_entry_point_thread(args, entry_point_snd)?;
-    start_load_thread(root, load_requests_rcv, parse_requests_snd)?;
+    start_load_thread(&root, load_requests_rcv, parse_requests_snd)?;
     start_parser_thread(parse_requests_rcv, cli_requests_snd)?;
     start_cli_stats_thread(cli_requests_rcv, loc_requests_snd, stats_snd.clone())?;
     start_location_stats_thread(loc_requests_rcv, comp_notify_snd, stats_snd)?;
@@ -44,7 +42,7 @@ pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(Site, Model)>, Box<dyn
 
     // Monitor progress and post updates here
     let mut pb = ProgressBar::new(total_num as u64);
-    let arch = Archive::connect(root)?;
+    let arch = Archive::connect(&root)?;
     for msg in comp_notify_rcv {
         match msg {
             PopulateCompleted { num, site, model } => {
@@ -65,12 +63,12 @@ pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(Site, Model)>, Box<dyn
                 print!("\u{001b}[300D\u{001b}[K");
                 println!(
                     "Error parsing file, removing from archive: {} - {} - {}",
-                    site.id, model, valid_time
+                    site.station_num, model, valid_time
                 );
                 println!("  {}", msg);
                 pb.set(num as u64);
-                if arch.file_exists(&site.id, model, &valid_time)? {
-                    arch.remove(&site.id, model, &valid_time)?;
+                if arch.file_exists(site.station_num, model, valid_time)? {
+                    arch.remove(site.station_num, model, valid_time)?;
                 }
             }
             _ => {
@@ -117,17 +115,12 @@ macro_rules! send_or_bail {
 fn start_entry_point_thread(
     args: CmdLineArgs,
     entry_point_snd: Sender<DataPopulateMsg>,
-) -> Result<i64, Box<dyn Error>> {
+) -> Result<u64, Box<dyn Error>> {
     let arch = Archive::connect(&args.root)?;
-    let sites = args
-        .sites
-        .iter()
-        .map(|s| arch.site_info(s))
-        .collect::<Result<Vec<Site>, BufkitDataErr>>()?;
 
     let mut total = 0;
-    for (site, &model) in iproduct!(&sites, &args.models) {
-        total += arch.count_init_times(&site.id, model)?;
+    for (site_info, model) in args.site_model_pairs.iter() {
+        total += arch.count(site_info.station_num, *model)? as u64;
     }
 
     thread::Builder::new()
@@ -143,8 +136,9 @@ fn start_entry_point_thread(
             );
 
             let mut counter = 0;
-            for (site, &model) in iproduct!(&sites, &args.models) {
-                let init_times = assign_or_bail!(arch.init_times(&site.id, model), entry_point_snd);
+            for (site, model) in args.site_model_pairs.into_iter() {
+                let init_times =
+                    assign_or_bail!(arch.inventory(site.station_num, model), entry_point_snd);
                 let init_times: HashSet<NaiveDateTime> = HashSet::from_iter(init_times);
 
                 let done_times = if !force_rebuild {
@@ -187,7 +181,7 @@ fn start_load_thread(
     thread::Builder::new()
         .name("FileLoader".to_string())
         .spawn(move || {
-            let arch = assign_or_bail!(Archive::connect(root), parse_requests_snd);
+            let arch = assign_or_bail!(Archive::connect(&root), parse_requests_snd);
 
             for load_req in load_requests_rcv {
                 let message = match load_req {
@@ -196,7 +190,7 @@ fn start_load_thread(
                         site,
                         model,
                         init_time,
-                    } => match arch.retrieve(&site.id, model, init_time) {
+                    } => match arch.retrieve(site.station_num, model, init_time) {
                         Ok(data) => DataPopulateMsg::Parse {
                             num,
                             site,
@@ -439,39 +433,39 @@ fn start_stats_thread(
 enum DataPopulateMsg {
     Load {
         num: usize,
-        site: Site,
+        site: SiteInfo,
         model: Model,
         init_time: NaiveDateTime,
     },
     Parse {
         num: usize,
-        site: Site,
+        site: SiteInfo,
         model: Model,
         init_time: NaiveDateTime,
         data: String,
     },
     CliData {
         num: usize,
-        site: Site,
+        site: SiteInfo,
         model: Model,
         valid_time: NaiveDateTime,
         snd: Box<Sounding>,
     },
     Location {
         num: usize,
-        site: Site,
+        site: SiteInfo,
         model: Model,
         valid_time: NaiveDateTime,
         snd: Box<Sounding>,
     },
     PopulateCompleted {
         num: usize,
-        site: Site,
+        site: SiteInfo,
         model: Model,
     },
     DataError {
         num: usize,
-        site: Site,
+        site: SiteInfo,
         model: Model,
         valid_time: NaiveDateTime,
         msg: String,

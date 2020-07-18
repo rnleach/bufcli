@@ -2,7 +2,7 @@
 
 use super::ClimoDB;
 use crate::{CumulativeDistribution, Deciles};
-use bufkit_data::{Model, Site};
+use bufkit_data::{Model, SiteInfo};
 use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, Timelike};
 use rusqlite::{params, Statement, NO_PARAMS};
 use std::error::Error;
@@ -15,7 +15,7 @@ pub struct ClimoCDFBuilderInterface<'a, 'b: 'a> {
 }
 
 struct Record {
-    site: Site,
+    site: SiteInfo,
     model: Model,
     day_of_year: u32,
     hour: u32,
@@ -50,10 +50,16 @@ impl<'a, 'b> ClimoCDFBuilderInterface<'a, 'b> {
     }
 
     /// Load all the available for the site, model pair
-    pub fn load_all_data(&mut self, site: &Site, model: Model) -> Result<AllData, Box<dyn Error>> {
+    pub fn load_all_data(
+        &mut self,
+        site: &SiteInfo,
+        model: Model,
+    ) -> Result<AllData, Box<dyn Error>> {
+        let station_num: u32 = site.station_num.into();
+
         let data: Vec<(NaiveDateTime, f64, f64, f64, f64)> = self
             .all_data_query
-            .query_map(params![site.id, model.as_static_str()], |row| {
+            .query_map(params![station_num, model.as_static_str()], |row| {
                 Ok((
                     row.get(0)?, // valid time
                     row.get(1)?, // hdw
@@ -82,7 +88,7 @@ impl<'a, 'b> ClimoCDFBuilderInterface<'a, 'b> {
     /// Add/Update `Deciles` in the database.
     pub fn add_to_db(
         &mut self,
-        site: &Site,
+        site: &SiteInfo,
         model: Model,
         day_of_year: u32,
         hour: u32,
@@ -172,8 +178,10 @@ impl<'a, 'b> ClimoCDFBuilderInterface<'a, 'b> {
             .execute("BEGIN TRANSACTION", NO_PARAMS)?;
 
         for record in self.buffer.drain(..) {
+            let station_num: u32 = record.site.station_num.into();
+
             self.add_cdf_query.execute(params![
-                record.site.id,
+                station_num,
                 record.model.as_static_str(),
                 record.day_of_year,
                 record.hour,
@@ -198,6 +206,8 @@ impl<'a, 'b> Drop for ClimoCDFBuilderInterface<'a, 'b> {
 }
 
 fn make_window_func(start: NaiveDate, end: NaiveDate) -> impl Fn(NaiveDateTime) -> bool {
+    use std::cmp::Ordering;
+
     let start_month = start.month();
     let start_day = start.day();
     let end_month = end.month();
@@ -207,17 +217,19 @@ fn make_window_func(start: NaiveDate, end: NaiveDate) -> impl Fn(NaiveDateTime) 
         let vt_month = vt.month();
         let vt_day = vt.day();
 
-        if start_month < end_month {
-            (vt_month == start_month && vt_day >= start_day)
-                || (vt_month == end_month && vt_day <= end_day)
-                || (vt_month > start_month && vt_month < end_month)
-        } else if start_month == end_month {
-            vt_day >= start_day && vt_day <= end_day
-        } else {
-            // start_month > end_month, wrap around the year
-            (vt_month == start_month && vt_day >= start_day)
-                || (vt_month == end_month && vt_day <= end_day)
-                || (vt_month > start_month || vt_month < end_month)
+        match start_month.cmp(&end_month) {
+            Ordering::Less => {
+                (vt_month == start_month && vt_day >= start_day)
+                    || (vt_month == end_month && vt_day <= end_day)
+                    || (vt_month > start_month && vt_month < end_month)
+            }
+            Ordering::Equal => vt_day >= start_day && vt_day <= end_day,
+            Ordering::Greater => {
+                // start_month > end_month, wrap around the year
+                (vt_month == start_month && vt_day >= start_day)
+                    || (vt_month == end_month && vt_day <= end_day)
+                    || (vt_month > start_month || vt_month < end_month)
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 use super::ClimoDB;
 use super::StatsRecord;
-use bufkit_data::{Model, Site};
+use bufkit_data::{Model, SiteInfo};
 use chrono::{Datelike, FixedOffset, NaiveDateTime, TimeZone, Timelike};
 use rusqlite::{types::ToSql, Statement, NO_PARAMS};
 use std::error::Error;
@@ -35,14 +35,15 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
     #[inline]
     pub fn valid_times_for(
         &mut self,
-        site: &Site,
+        site: &SiteInfo,
         model: Model,
     ) -> Result<Vec<NaiveDateTime>, Box<dyn Error>> {
         let model_str = model.as_static_str();
+        let station_num: u32 = site.station_num.into();
 
         let valid_times: Result<Vec<NaiveDateTime>, _> = self
             .init_times_query
-            .query_map(&[&site.id as &dyn ToSql, &model_str], |row| row.get(0))?
+            .query_map(&[&station_num as &dyn ToSql, &model_str], |row| row.get(0))?
             .collect();
         let valid_times = valid_times?;
 
@@ -88,9 +89,11 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                         let day_lcl = lcl_time.day();
                         let hour_lcl = lcl_time.hour();
 
+                        let station_num: u32 = site.station_num.into();
+
                         self.add_data_query
                             .execute(&[
-                                &site.id as &dyn ToSql,
+                                &station_num as &dyn ToSql,
                                 &model.as_static_str(),
                                 &valid_time as &dyn ToSql,
                                 &year_lcl as &dyn ToSql,
@@ -111,24 +114,28 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                         lat,
                         lon,
                         elev_m,
-                    } => self
-                        .add_location_query
-                        .execute(&[
-                            &site.id as &dyn ToSql,
-                            &model.as_static_str(),
-                            &valid_time as &dyn ToSql,
-                            &lat as &dyn ToSql,
-                            &lon as &dyn ToSql,
-                            &elev_m as &dyn ToSql,
-                        ])
-                        .map(|_| ()),
+                    } => {
+                        // unwrap should be ok because we filtered out sites without a name
+                        let name: String = site.name.unwrap();
+                        self.add_location_query
+                            .execute(&[
+                                &Into::<u32>::into(site.station_num) as &dyn ToSql,
+                                &name,
+                                &model.as_static_str(),
+                                &valid_time as &dyn ToSql,
+                                &lat as &dyn ToSql,
+                                &lon as &dyn ToSql,
+                                &elev_m as &dyn ToSql,
+                            ])
+                            .map(|_| ())
+                    }
                 }
             } {
                 eprintln!("Error adding data to database: {}", err);
                 self.climo_db
                     .conn
                     .execute("COMMIT TRANSACTION", NO_PARAMS)?;
-                Err(err)?;
+                return Err(err.into());
             }
         }
 

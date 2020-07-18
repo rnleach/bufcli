@@ -1,6 +1,6 @@
 use super::CAPACITY;
 use bufcli::{ClimoCDFBuilderInterface, ClimoDB, Deciles};
-use bufkit_data::{Model, Site};
+use bufkit_data::{Model, SiteInfo};
 use chrono::NaiveDateTime;
 use crossbeam_channel::{self as channel, Sender};
 use pbr::ProgressBar;
@@ -10,10 +10,9 @@ use std::{
     path::Path,
     thread::{self},
 };
-use threadpool;
 
 pub(super) fn build(
-    site_model_pairs: HashSet<(Site, Model)>,
+    site_model_pairs: HashSet<(SiteInfo, Model)>,
     archive_root: &Path,
 ) -> Result<(), Box<dyn Error>> {
     println!("Updating distributions.");
@@ -65,7 +64,7 @@ macro_rules! send_or_bail {
 }
 
 fn start_deciles_builder(
-    set: HashSet<(Site, Model)>,
+    set: HashSet<(SiteInfo, Model)>,
     to_main: Sender<DecilesBuilderMsg>,
     root: &Path,
 ) -> Result<(), Box<dyn Error>> {
@@ -160,12 +159,12 @@ fn start_deciles_builder(
 #[derive(Debug)]
 enum DecilesBuilderMsg {
     HourlyCDFData {
-        site: Site,
+        site: SiteInfo,
         model: Model,
         data: Vec<(NaiveDateTime, f64, f64, f64, f64)>,
     },
     CDFDBAdd {
-        site: Site,
+        site: SiteInfo,
         model: Model,
         cdfs: Vec<(
             u32, // day of year

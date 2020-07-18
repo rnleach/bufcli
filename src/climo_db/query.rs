@@ -25,7 +25,7 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
     /// Retrieve hourly `Deciles`s
     pub fn hourly_deciles(
         &mut self,
-        site: &bufkit_data::Site,
+        site: &bufkit_data::SiteInfo,
         model: &str,
         element: ClimoElement,
         start_time: chrono::NaiveDateTime,
@@ -41,9 +41,11 @@ impl<'a, 'b> ClimoQueryInterface<'a, 'b> {
 
         let local_db_conn = &self.climo_db.stats_conn;
 
+        let station_num: u32 = site.station_num.into();
+
         let data: Vec<(chrono::NaiveDateTime, Deciles)> = self
             .deciles_statement
-            .query_map(rusqlite::params![site.id, model], |row| {
+            .query_map(rusqlite::params![station_num, model], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get(2)?))
             })?
             // Filter out errors

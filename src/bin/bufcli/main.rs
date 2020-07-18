@@ -4,7 +4,7 @@
 //! archive. These can be queried later by other tools to provide context to any given analysis.
 mod builder;
 
-use bufkit_data::Model;
+use bufkit_data::{Archive, BufkitDataErr, Model, SiteInfo};
 use std::{error::Error, path::PathBuf, str::FromStr};
 use strum::IntoEnumIterator;
 
@@ -42,8 +42,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 #[derive(Debug)]
 pub(crate) struct CmdLineArgs {
     root: PathBuf,
-    sites: Vec<String>,
-    models: Vec<Model>,
+    site_model_pairs: Vec<(SiteInfo, Model)>,
     operation: String,
 }
 
@@ -110,25 +109,14 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|hd| hd.join("bufkit")))
         .expect("Invalid root.");
-    let root_clone = root.clone();
 
-    let arch = match bufkit_data::Archive::connect(root) {
+    let arch = match Archive::connect(&root) {
         arch @ Ok(_) => arch,
         err @ Err(_) => {
             println!("Unable to connect to db, printing error and exiting.");
             err
         }
     }?;
-
-    let mut sites: Vec<String> = matches
-        .values_of("sites")
-        .into_iter()
-        .flat_map(|site_iter| site_iter.map(ToOwned::to_owned))
-        .collect();
-
-    if sites.is_empty() {
-        sites = arch.sites()?.into_iter().map(|site| site.id).collect();
-    }
 
     let mut models: Vec<Model> = matches
         .values_of("models")
@@ -141,12 +129,63 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
         models = vec![Model::GFS, Model::NAM, Model::NAM4KM];
     }
 
+    let sites: Vec<String> = matches
+        .values_of("sites")
+        .into_iter()
+        .flat_map(|site_iter| site_iter.map(ToOwned::to_owned))
+        .collect();
+
+    let site_model_pairs: Vec<(SiteInfo, Model)> = if sites.is_empty() {
+        let mut site_model_pairs = vec![];
+        let sites = arch.sites()?;
+        for site in sites.into_iter() {
+            if site.name.is_none() {
+                println!("Skipping site with no name: {}", site);
+                continue;
+            }
+
+            let site_models = arch.models(site.station_num)?;
+            for model in site_models {
+                if models.contains(&model) {
+                    site_model_pairs.push((site.clone(), model));
+                }
+            }
+        }
+        site_model_pairs
+    } else {
+        let mut site_model_pairs = vec![];
+        for model in models {
+            for site in &sites {
+                let site_stn_num = match arch.station_num_for_id(site, model) {
+                    Ok(station_num) => station_num,
+                    Err(BufkitDataErr::NotInIndex) => {
+                        println!("Skipping site not in index: {}", site);
+                        continue;
+                    }
+                    Err(err) => return Err(err.into()),
+                };
+
+                let site_info = match arch.site(site_stn_num) {
+                    Some(site_info) => site_info,
+                    None => continue,
+                };
+
+                if site_info.name.is_none() {
+                    println!("Skipping site with no name: {}", site_info);
+                    continue;
+                }
+
+                site_model_pairs.push((site_info, model));
+            }
+        }
+        site_model_pairs
+    };
+
     let operation: String = matches.value_of("operation").map(str::to_owned).unwrap();
 
     Ok(CmdLineArgs {
-        root: root_clone,
-        sites,
-        models,
+        root,
+        site_model_pairs,
         operation,
     })
 }

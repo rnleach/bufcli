@@ -1,4 +1,4 @@
-use bufkit_data::{Model, Site};
+use bufkit_data::{Model, SiteInfo};
 use chrono::NaiveDateTime;
 use metfor::Quantity;
 use sounding_analysis::{
@@ -10,7 +10,7 @@ use sounding_analysis::{
 #[derive(Clone, Debug)]
 pub enum StatsRecord {
     CliData {
-        site: Site,
+        site: SiteInfo,
         model: Model,
         valid_time: NaiveDateTime,
 
@@ -21,7 +21,7 @@ pub enum StatsRecord {
         dcape: Option<i32>,
     },
     Location {
-        site: Site,
+        site: SiteInfo,
         model: Model,
         valid_time: NaiveDateTime,
         lat: f64,
@@ -32,7 +32,7 @@ pub enum StatsRecord {
 
 impl StatsRecord {
     pub fn create_cli_data(
-        site: Site,
+        site: SiteInfo,
         model: Model,
         init_time: NaiveDateTime,
         snd: &Sounding,
@@ -41,12 +41,12 @@ impl StatsRecord {
         let (blow_up_dt, blow_up_meters): (Option<f64>, Option<i32>) = match blow_up(snd, None) {
             Err(_) => (None, None),
             Ok(BlowUpAnalysis {
-                delta_t_el,
-                delta_z_el,
+                delta_t_lmib,
+                delta_z_lmib,
                 ..
             }) => (
-                Some(delta_t_el.unpack()),
-                Some(delta_z_el.unpack()).map(|h| h as i32),
+                Some(delta_t_lmib.unpack()),
+                Some(delta_z_lmib.unpack()).map(|h| h as i32),
             ),
         };
         let dcape = dcape(snd).ok().map(|anal| anal.1.unpack() as i32);
@@ -65,11 +65,11 @@ impl StatsRecord {
     /// If I was unable create a location instance, return the site so I can use it without
     /// having to preemptively clone
     pub fn create_location_data(
-        site: Site,
+        site: SiteInfo,
         model: Model,
         valid_time: NaiveDateTime,
         snd: &Sounding,
-    ) -> Result<Self, Site> {
+    ) -> Result<Self, SiteInfo> {
         let info = snd.station_info();
 
         let location_data = info.location().and_then(|(lat, lon)| {
