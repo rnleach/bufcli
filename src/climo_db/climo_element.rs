@@ -6,16 +6,3 @@ pub enum ClimoElement {
     BlowUpHeight,
     DCAPE,
 }
-
-impl ClimoElement {
-    pub(crate) fn into_column_name(self) -> &'static str {
-        use ClimoElement::*;
-
-        match self {
-            HDW => "hdw",
-            BlowUpDt => "blow_up_dt",
-            BlowUpHeight => "blow_up_meters",
-            DCAPE => "dcape",
-        }
-    }
-}

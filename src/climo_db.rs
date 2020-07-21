@@ -3,7 +3,6 @@ use std::{error::Error, path::Path};
 
 pub struct ClimoDB {
     conn: Connection,
-    stats_conn: Connection,
 }
 
 impl ClimoDB {
@@ -34,30 +33,15 @@ impl ClimoDB {
         // Create the database if it doesn't exist.
         conn.execute_batch(include_str!("sql/create_climate_data_db.sql"))?;
 
-        let stats_file = climo_path.join(Self::CLIMO_STATS_DB);
-        let stats_conn = Connection::open_with_flags(
-            stats_file,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
-        )?;
-
-        // Create the database if it doesn't exist.
-        stats_conn.execute_batch(include_str!("sql/create_climate_stats_db.sql"))?;
-
-        Ok(ClimoDB { conn, stats_conn })
+        Ok(ClimoDB { conn})
     }
 }
-
-mod build_cdf;
-pub use build_cdf::ClimoCDFBuilderInterface;
 
 mod climo_element;
 pub use climo_element::ClimoElement;
 
 mod populate;
 pub use populate::ClimoPopulateInterface;
-
-mod query;
-pub use query::ClimoQueryInterface;
 
 mod stats_record;
 pub use stats_record::StatsRecord;

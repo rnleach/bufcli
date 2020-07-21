@@ -10,10 +10,9 @@
 //
 pub use crate::{
     climo_db::{
-        ClimoCDFBuilderInterface, ClimoDB, ClimoElement, ClimoPopulateInterface,
-        ClimoQueryInterface, StatsRecord,
+        ClimoDB, ClimoElement, ClimoPopulateInterface,
+        StatsRecord,
     },
-    distributions::{CumulativeDistribution, Deciles, Percentile},
     error::BufcliError,
 };
 
@@ -21,5 +20,4 @@ pub use crate::{
 // Private implementation.
 //
 mod climo_db;
-mod distributions;
 mod error;
