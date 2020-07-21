@@ -1,6 +1,6 @@
 [package]
 name = "bufcli"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Ryan <rnleach@users.noreply.github.com>"]
 edition = "2018"
 publish = false
@@ -17,7 +17,7 @@ metfor = "^0.7.4"
 pbr = "^1.0.1"
 rusqlite = { version = "^0.23", features = ["bundled", "chrono", "blob"], default-features = false }
 serde = { version = "^1.0.102", features = ["derive"] }
-sounding-analysis = "^0.14.1"
+sounding-analysis = "^0.14.3"
 sounding-bufkit = "^0.14"
 strum = "0.18"
 threadpool = "1.7.1"

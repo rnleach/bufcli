@@ -40,12 +40,12 @@ impl StatsRecord {
         let (blow_up_dt, blow_up_meters): (Option<f64>, Option<i32>) = match blow_up(snd, None) {
             Err(_) => (None, None),
             Ok(BlowUpAnalysis {
-                delta_t_lmib,
-                delta_z_lmib,
+                delta_t_el,
+                delta_z_el,
                 ..
             }) => (
-                Some(delta_t_lmib.unpack()),
-                Some(delta_z_lmib.unpack()).map(|h| h as i32),
+                Some(delta_t_el.unpack()),
+                Some(delta_z_el.unpack()).map(|h| h as i32),
             ),
         };
         let dcape = dcape(snd).ok().map(|anal| anal.1.unpack() as i32);
