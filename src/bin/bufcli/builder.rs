@@ -1,8 +1,8 @@
 use crate::CmdLineArgs;
 use std::error::Error;
 
-// Capacity of bounded channels used in data and deciles modules.
-const CAPACITY: usize = 16;
+// Capacity of bounded channels used in data module.
+const CAPACITY: usize = 256;
 
 mod data;
 
