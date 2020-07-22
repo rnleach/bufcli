@@ -8,13 +8,10 @@ pub struct ClimoDB {
 impl ClimoDB {
     pub const CLIMO_DIR: &'static str = "climo";
     pub const CLIMO_DB: &'static str = "climo.db";
-    pub const CLIMO_STATS_DB: &'static str = "climo_stats.db";
 
     pub fn delete_climo_db(arch_root: &Path) -> Result<(), Box<dyn Error>> {
         let data_path = &arch_root.join(Self::CLIMO_DIR).join(Self::CLIMO_DB);
-        let stats_path = &arch_root.join(Self::CLIMO_DIR).join(Self::CLIMO_STATS_DB);
         std::fs::remove_file(data_path)?;
-        std::fs::remove_file(stats_path)?;
         Ok(())
     }
 
