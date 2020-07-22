@@ -78,6 +78,7 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                         hdw,
                         blow_up_dt,
                         blow_up_meters,
+                        blow_up_index,
                         dcape,
                     } => {
                         let lcl_time = site
@@ -95,15 +96,16 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                             .execute(&[
                                 &station_num as &dyn ToSql,
                                 &model.as_static_str(),
-                                &valid_time as &dyn ToSql,
-                                &year_lcl as &dyn ToSql,
-                                &month_lcl as &dyn ToSql,
-                                &day_lcl as &dyn ToSql,
-                                &hour_lcl as &dyn ToSql,
-                                &hdw as &dyn ToSql,
-                                &blow_up_dt as &dyn ToSql,
-                                &blow_up_meters as &dyn ToSql,
-                                &dcape as &dyn ToSql,
+                                &valid_time,
+                                &year_lcl,
+                                &month_lcl,
+                                &day_lcl,
+                                &hour_lcl,
+                                &hdw,
+                                &blow_up_dt,
+                                &blow_up_meters,
+                                &blow_up_index,
+                                &dcape,
                             ])
                             .map(|_| ())
                     }

@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS cli (
 
     el_blow_up_dt     REAL,
     el_blow_up_meters INT,
+    blow_up_index     REAL,
 
     dcape             INT,
 
