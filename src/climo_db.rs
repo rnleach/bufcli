@@ -28,14 +28,20 @@ impl ClimoDB {
         )?;
 
         // Create the database if it doesn't exist.
-        conn.execute_batch(include_str!("sql/create_climate_data_db.sql"))?;
+        conn.execute_batch(include_str!("climo_db/create_climate_data_db.sql"))?;
 
-        Ok(ClimoDB { conn})
+        Ok(ClimoDB { conn })
     }
 }
 
-mod climo_element;
-pub use climo_element::ClimoElement;
+/// Elements we can query for climo data.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClimoElement {
+    HDW,
+    BlowUpDt,
+    BlowUpHeight,
+    DCAPE,
+}
 
 mod populate;
 pub use populate::ClimoPopulateInterface;

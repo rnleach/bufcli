@@ -19,9 +19,9 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
 
     pub fn initialize(climo_db: &'b ClimoDB) -> Result<Self, Box<dyn Error>> {
         let conn = &climo_db.conn;
-        let add_location_query = conn.prepare(include_str!("../sql/add_location.sql"))?;
-        let add_data_query = conn.prepare(include_str!("../sql/add_data.sql"))?;
-        let init_times_query = conn.prepare(include_str!("../sql/init_times.sql"))?;
+        let add_location_query = conn.prepare(include_str!("add_location.sql"))?;
+        let add_data_query = conn.prepare(include_str!("add_data.sql"))?;
+        let init_times_query = conn.prepare(include_str!("init_times.sql"))?;
 
         Ok(ClimoPopulateInterface {
             climo_db,

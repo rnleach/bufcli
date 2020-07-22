@@ -9,10 +9,7 @@
 // Public API
 //
 pub use crate::{
-    climo_db::{
-        ClimoDB, ClimoElement, ClimoPopulateInterface,
-        StatsRecord,
-    },
+    climo_db::{ClimoDB, ClimoElement, ClimoPopulateInterface, StatsRecord},
     error::BufcliError,
 };
 

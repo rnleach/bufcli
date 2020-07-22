@@ -18,12 +18,6 @@ use std::{
 const CAPACITY: usize = 256;
 
 pub(crate) fn build_climo(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
-    build(args)?;
-
-    Ok(())
-}
-
-pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(SiteInfo, Model)>, Box<dyn Error>> {
     use DataPopulateMsg::*;
 
     let root = args.root.clone();
@@ -46,16 +40,13 @@ pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(SiteInfo, Model)>, Box
     start_cli_stats_thread(cli_requests_rcv, loc_requests_snd, stats_snd.clone())?;
     start_location_stats_thread(loc_requests_rcv, comp_notify_snd, stats_snd)?;
 
-    let mut site_model_pairs = HashSet::new();
-
     // Monitor progress and post updates here
     let mut pb = ProgressBar::new(total_num as u64);
     let arch = Archive::connect(&root)?;
     for msg in comp_notify_rcv {
         match msg {
-            PopulateCompleted { num, site, model } => {
+            PopulateCompleted { num } => {
                 pb.set(num as u64);
-                site_model_pairs.insert((site, model));
             }
             TerminateThread => {
                 // Signal that the stats thread is done, so everything else must also be done.
@@ -89,7 +80,7 @@ pub(super) fn build(args: CmdLineArgs) -> Result<HashSet<(SiteInfo, Model)>, Box
     // Let stats drop implementation release the database and commit all changes.
     stats_jh.join().unwrap();
 
-    Ok(site_model_pairs)
+    Ok(())
 }
 
 macro_rules! assign_or_bail {
@@ -379,8 +370,7 @@ fn start_location_stats_thread(
                             Ok(msg) => {
                                 send_or_bail!(msg, climo_update_requests);
 
-                                let message =
-                                    DataPopulateMsg::PopulateCompleted { num, site, model };
+                                let message = DataPopulateMsg::PopulateCompleted { num };
                                 send_or_bail!(message, completed_notification);
                             }
                             Err(site) => {
@@ -463,8 +453,6 @@ enum DataPopulateMsg {
     },
     PopulateCompleted {
         num: usize,
-        site: SiteInfo,
-        model: Model,
     },
     DataError {
         num: usize,
