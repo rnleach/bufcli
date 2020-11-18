@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 bincode = "^1.2"
-bufkit-data = "^0.15.0"
+bufkit-data = "^0.17.1"
 chrono = "^0.4.2"
 clap = { version = "^2.32.0", features = ["wrap_help"]}
 crossbeam-channel = "^0.4.0"
@@ -15,11 +15,11 @@ dirs = "^3.0"
 itertools = "^0.9"
 metfor = "^0.7.4"
 pbr = "^1.0.1"
-rusqlite = { version = "^0.23", features = ["bundled", "chrono", "blob"], default-features = false }
+rusqlite = { version = "^0.24", features = ["bundled", "chrono", "blob"], default-features = false }
 serde = { version = "^1.0.102", features = ["derive"] }
 sounding-analysis = "^0.14.4"
 sounding-bufkit = "^0.14"
-strum = "0.18"
+strum = "0.19"
 threadpool = "1.7.1"
 
 [patch.crates-io]
