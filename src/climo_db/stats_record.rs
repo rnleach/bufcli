@@ -17,7 +17,6 @@ pub enum StatsRecord {
         hdw: Option<i32>,
         blow_up_dt: Option<f64>,
         blow_up_meters: Option<i32>,
-        blow_up_index: Option<f64>,
 
         dcape: Option<i32>,
     },
@@ -40,7 +39,6 @@ impl StatsRecord {
         let hdw = hot_dry_windy(snd).ok().map(|hdw| hdw as i32);
 
         let bua = blow_up(snd, None);
-        let blow_up_index = bua.as_ref().map(|bua| bua.as_index()).ok();
 
         let (blow_up_dt, blow_up_meters): (Option<f64>, Option<i32>) = match bua {
             Err(_) => (None, None),
@@ -62,7 +60,6 @@ impl StatsRecord {
             hdw,
             blow_up_dt,
             blow_up_meters,
-            blow_up_index,
             dcape,
         }
     }

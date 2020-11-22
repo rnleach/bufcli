@@ -78,7 +78,6 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                         hdw,
                         blow_up_dt,
                         blow_up_meters,
-                        blow_up_index,
                         dcape,
                     } => {
                         let lcl_time = site
@@ -104,7 +103,6 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                                 &hdw,
                                 &blow_up_dt,
                                 &blow_up_meters,
-                                &blow_up_index,
                                 &dcape,
                             ])
                             .map(|_| ())

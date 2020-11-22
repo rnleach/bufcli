@@ -17,11 +17,7 @@ metfor = "^0.7.4"
 pbr = "^1.0.1"
 rusqlite = { version = "^0.24", features = ["bundled", "chrono", "blob"], default-features = false }
 serde = { version = "^1.0.102", features = ["derive"] }
-sounding-analysis = "^0.14.4"
+sounding-analysis = "^0.14.3"
 sounding-bufkit = "^0.14"
 strum = "0.19"
 threadpool = "1.7.1"
-
-[patch.crates-io]
-sounding-analysis = {path = "../sounding-analysis"}
-
