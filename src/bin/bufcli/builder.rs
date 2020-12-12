@@ -43,14 +43,20 @@ pub(crate) fn build_climo(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
     // Monitor progress and post updates here
     let mut pb = ProgressBar::new(total_num as u64);
     let arch = Archive::connect(&root)?;
+    let mut num_terminates = 0;
     for msg in comp_notify_rcv {
         match msg {
             PopulateCompleted { num } => {
                 pb.set(num as u64);
             }
             TerminateThread => {
-                // Signal that the stats thread is done, so everything else must also be done.
-                pb.finish();
+                num_terminates += 1;
+
+                if num_terminates >= 2 {
+                    // Signal that the stats thread and location stats thread are done, 
+                    // so everything else must also be done.
+                    pb.finish();
+                }
             }
             DataError {
                 num,
@@ -97,6 +103,19 @@ macro_rules! assign_or_bail {
             }
         }
     };
+    ($res:expr, $channel:ident, $msg:expr) => {
+        match $res {
+            Ok(val) => val,
+            Err(err) => {
+                $channel
+                    .send(DataPopulateMsg::ThreadError(err.to_string() + $msg))
+                    .unwrap_or_else(|err| {
+                        eprintln!("Broken channel, returning from thread with error: {}", err)
+                    });
+                return;
+            }
+        }
+    };
 }
 
 macro_rules! send_or_bail {
@@ -127,22 +146,37 @@ fn start_entry_point_thread(
         .spawn(move || {
             let force_rebuild = args.operation == "build";
 
-            let arch = assign_or_bail!(Archive::connect(&args.root), entry_point_snd);
-            let climo_db = assign_or_bail!(ClimoDB::connect_or_create(&args.root), entry_point_snd);
+            let arch = assign_or_bail!(
+                Archive::connect(&args.root),
+                entry_point_snd,
+                " error connecting to archive"
+            );
+            let climo_db = assign_or_bail!(
+                ClimoDB::connect_or_create(&args.root),
+                entry_point_snd,
+                " error connecting to climo db"
+            );
             let mut climo_db = assign_or_bail!(
                 ClimoPopulateInterface::initialize(&climo_db),
-                entry_point_snd
+                entry_point_snd,
+                " error connecting to ClimoPopulateInterface"
             );
 
             let mut counter = 0;
             for (site, model) in args.site_model_pairs.into_iter() {
-                let init_times =
-                    assign_or_bail!(arch.inventory(site.station_num, model), entry_point_snd);
+                let init_times = assign_or_bail!(
+                    arch.inventory(site.station_num, model),
+                    entry_point_snd,
+                    " error retrieving init_times"
+                );
                 let init_times: HashSet<NaiveDateTime> = HashSet::from_iter(init_times);
 
                 let done_times = if !force_rebuild {
-                    let iter =
-                        assign_or_bail!(climo_db.valid_times_for(&site, model), entry_point_snd);
+                    let iter = assign_or_bail!(
+                        climo_db.valid_times_for(&site, model),
+                        entry_point_snd,
+                        " error retriving done_times"
+                    );
                     HashSet::from_iter(iter)
                 } else {
                     HashSet::new()
@@ -180,7 +214,11 @@ fn start_load_thread(
     thread::Builder::new()
         .name("FileLoader".to_string())
         .spawn(move || {
-            let arch = assign_or_bail!(Archive::connect(&root), parse_requests_snd);
+            let arch = assign_or_bail!(
+                Archive::connect(&root),
+                parse_requests_snd,
+                " error connecting in FileLoader"
+            );
 
             for load_req in load_requests_rcv {
                 let message = match load_req {
@@ -389,6 +427,10 @@ fn start_location_stats_thread(
                     send_or_bail!(msg, completed_notification);
                 }
             }
+
+            completed_notification
+                .send(DataPopulateMsg::TerminateThread)
+                .expect("Error sending terminate thread.");
         })?;
 
     Ok(())
