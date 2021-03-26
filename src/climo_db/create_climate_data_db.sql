@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS cli (
     PRIMARY KEY (station_num, valid_time, model, year_lcl, month_lcl, day_lcl, hour_lcl));
 
 PRAGMA cache_size=100000;
+PRAGMA busy_timeout = 20000;
 
 COMMIT;
 
