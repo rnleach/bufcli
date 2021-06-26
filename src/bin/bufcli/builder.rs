@@ -235,13 +235,14 @@ fn start_load_thread(
                             init_time,
                             data,
                         },
-                        Err(err) => DataPopulateMsg::DataError {
+                        Err(err) => {
+                            DataPopulateMsg::DataError {
                             num,
                             site,
                             model,
                             valid_time: init_time,
-                            msg: err.to_string(),
-                        },
+                            msg: err.to_string() + " in data load thread",
+                        }},
                     },
                     message => message,
                 };
@@ -277,7 +278,7 @@ fn start_parser_thread(
                                 site,
                                 model,
                                 valid_time: init_time,
-                                msg: err.to_string(),
+                                msg: err.to_string() + "in data parse thread",
                             };
                             send_or_bail!(message, cli_requests);
                             continue;
@@ -305,7 +306,7 @@ fn start_parser_thread(
                                 site: site.clone(),
                                 model,
                                 valid_time: init_time,
-                                msg: "No valid time".to_string(),
+                                msg: "No valid time in parse thread".to_string(),
                             };
 
                             send_or_bail!(message, cli_requests);
@@ -417,7 +418,7 @@ fn start_location_stats_thread(
                                     site,
                                     model,
                                     valid_time,
-                                    msg: "Missing location information".to_string(),
+                                    msg: "Missing location information in location stats thread".to_string(),
                                 };
                                 send_or_bail!(message, completed_notification);
                             }
