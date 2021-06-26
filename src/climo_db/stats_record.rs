@@ -1,11 +1,7 @@
 use bufkit_data::{Model, SiteInfo};
 use chrono::NaiveDateTime;
 use metfor::Quantity;
-use sounding_analysis::{
-    dcape,
-    experimental::fire::{blow_up, BlowUpAnalysis},
-    hot_dry_windy, Sounding,
-};
+use sounding_analysis::{experimental::fire::BlowUpAnalysis, Sounding};
 
 #[derive(Clone, Debug)]
 pub enum StatsRecord {
@@ -16,7 +12,7 @@ pub enum StatsRecord {
 
         hdw: Option<i32>,
         blow_up_dt: Option<f64>,
-        blow_up_meters: Option<i32>,
+        pft: Option<i32>,
 
         dcape: Option<i32>,
     },
@@ -36,22 +32,24 @@ impl StatsRecord {
         init_time: NaiveDateTime,
         snd: &Sounding,
     ) -> Self {
-        let hdw = hot_dry_windy(snd).ok().map(|hdw| hdw as i32);
+        let hdw = sounding_analysis::hot_dry_windy(snd)
+            .ok()
+            .map(|hdw| hdw as i32);
 
-        let bua = blow_up(snd, None);
+        let bua = sounding_analysis::experimental::fire::blow_up(snd, None);
 
-        let (blow_up_dt, blow_up_meters): (Option<f64>, Option<i32>) = match bua {
-            Err(_) => (None, None),
-            Ok(BlowUpAnalysis {
-                delta_t_el,
-                delta_z_el,
-                ..
-            }) => (
-                Some(delta_t_el.unpack()),
-                Some(delta_z_el.unpack()).map(|h| h as i32),
-            ),
+        let blow_up_dt: Option<f64> = match bua {
+            Err(_) => None,
+            Ok(BlowUpAnalysis { delta_t_el, .. }) => Some(delta_t_el.unpack()),
         };
-        let dcape = dcape(snd).ok().map(|anal| anal.1.unpack() as i32);
+
+        let pft: Option<i32> = sounding_analysis::pft(snd, 15.0)
+            .map(|pft| pft.unpack() as i32)
+            .ok();
+
+        let dcape = sounding_analysis::dcape(snd)
+            .ok()
+            .map(|anal| anal.1.unpack() as i32);
 
         StatsRecord::CliData {
             site,
@@ -59,7 +57,7 @@ impl StatsRecord {
             valid_time: init_time,
             hdw,
             blow_up_dt,
-            blow_up_meters,
+            pft,
             dcape,
         }
     }

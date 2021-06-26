@@ -12,21 +12,21 @@ CREATE TABLE IF NOT EXISTS locations (
 CREATE INDEX IF NOT EXISTS locations_idx ON locations (station_num, model);
 
 CREATE TABLE IF NOT EXISTS cli (
-    station_num       INT  NOT NULL,
-    model             TEXT NOT NULL,
+    station_num   INT  NOT NULL,
+    model         TEXT NOT NULL,
 
-    valid_time        TEXT NOT NULL,
-    year_lcl          INT  NOT NULL,
-    month_lcl         INT  NOT NULL,
-    day_lcl           INT  NOT NULL,
-    hour_lcl          INT  NOT NULL,
+    valid_time    TEXT NOT NULL,
+    year_lcl      INT  NOT NULL,
+    month_lcl     INT  NOT NULL,
+    day_lcl       INT  NOT NULL,
+    hour_lcl      INT  NOT NULL,
 
-    hdw               INT,
+    hdw           INT,
 
-    el_blow_up_dt     REAL,
-    el_blow_up_meters INT,
+    el_blow_up_dt REAL,
+    pft           INT,
 
-    dcape             INT,
+    dcape         INT,
 
     PRIMARY KEY (station_num, valid_time, model, year_lcl, month_lcl, day_lcl, hour_lcl));
 

@@ -2,7 +2,7 @@ use super::ClimoDB;
 use super::StatsRecord;
 use bufkit_data::{Model, SiteInfo};
 use chrono::{Datelike, FixedOffset, NaiveDateTime, TimeZone, Timelike};
-use rusqlite::{types::ToSql, Statement, NO_PARAMS};
+use rusqlite::{types::ToSql, Statement};
 use std::error::Error;
 
 /// The struct creates and caches several prepared statements for adding data to the climo database.
@@ -66,7 +66,7 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
     fn flush(&mut self) -> Result<(), Box<dyn Error>> {
         use self::StatsRecord::*;
 
-        self.climo_db.conn.execute("BEGIN TRANSACTION", NO_PARAMS)?;
+        self.climo_db.conn.execute("BEGIN TRANSACTION", [])?;
 
         for record in self.write_buffer.drain(..) {
             if let Err(err) = {
@@ -77,7 +77,7 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                         valid_time,
                         hdw,
                         blow_up_dt,
-                        blow_up_meters,
+                        pft,
                         dcape,
                     } => {
                         let lcl_time = site
@@ -102,7 +102,7 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                                 &hour_lcl,
                                 &hdw,
                                 &blow_up_dt,
-                                &blow_up_meters,
+                                &pft,
                                 &dcape,
                             ])
                             .map(|_| ())
@@ -130,16 +130,12 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
                 }
             } {
                 eprintln!("Error adding data to database: {}", err);
-                self.climo_db
-                    .conn
-                    .execute("COMMIT TRANSACTION", NO_PARAMS)?;
+                self.climo_db.conn.execute("COMMIT TRANSACTION", [])?;
                 return Err(err.into());
             }
         }
 
-        self.climo_db
-            .conn
-            .execute("COMMIT TRANSACTION", NO_PARAMS)?;
+        self.climo_db.conn.execute("COMMIT TRANSACTION", [])?;
 
         Ok(())
     }
@@ -148,6 +144,6 @@ impl<'a, 'b> ClimoPopulateInterface<'a, 'b> {
 impl<'a, 'b> Drop for ClimoPopulateInterface<'a, 'b> {
     fn drop(&mut self) {
         self.flush().unwrap();
-        self.climo_db.conn.execute("VACUUM", NO_PARAMS).unwrap();
+        self.climo_db.conn.execute("VACUUM", []).unwrap();
     }
 }

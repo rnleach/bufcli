@@ -53,7 +53,7 @@ pub(crate) fn build_climo(args: CmdLineArgs) -> Result<(), Box<dyn Error>> {
                 num_terminates += 1;
 
                 if num_terminates >= 2 {
-                    // Signal that the stats thread and location stats thread are done, 
+                    // Signal that the stats thread and location stats thread are done,
                     // so everything else must also be done.
                     pb.finish();
                 }
