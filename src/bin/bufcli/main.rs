@@ -47,26 +47,26 @@ pub(crate) struct CmdLineArgs {
 }
 
 fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
-    let app = clap::App::new("bufcli")
+    let app = clap::Command::new("bufcli")
         .author("Ryan <rnleach@users.noreply.github.com>")
         .version(clap::crate_version!())
         .about("Model sounding climatology.")
         .arg(
-            clap::Arg::with_name("sites")
-                .multiple(true)
-                .short("s")
+            clap::Arg::new("sites")
+                .multiple_values(true)
+                .short('s')
                 .long("sites")
                 .takes_value(true)
                 .help("Site identifiers (e.g. kord, katl, smn)."),
         )
         .arg(
-            clap::Arg::with_name("models")
-                .multiple(true)
-                .short("m")
+            clap::Arg::new("models")
+                .multiple_values(true)
+                .short('m')
                 .long("models")
                 .takes_value(true)
                 .possible_values(
-                    &Model::iter()
+                    Model::iter()
                         .map(|val| val.as_static_str())
                         .collect::<Vec<&str>>(),
                 )
@@ -77,8 +77,8 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
                 )),
         )
         .arg(
-            clap::Arg::with_name("root")
-                .short("r")
+            clap::Arg::new("root")
+                .short('r')
                 .long("root")
                 .takes_value(true)
                 .help("Set the root of the archive.")
@@ -89,7 +89,7 @@ fn parse_args() -> Result<CmdLineArgs, Box<dyn Error>> {
                 .global(true),
         )
         .arg(
-            clap::Arg::with_name("operation")
+            clap::Arg::new("operation")
                 .index(1)
                 .takes_value(true)
                 .required(true)

@@ -235,14 +235,13 @@ fn start_load_thread(
                             init_time,
                             data,
                         },
-                        Err(err) => {
-                            DataPopulateMsg::DataError {
+                        Err(err) => DataPopulateMsg::DataError {
                             num,
                             site,
                             model,
                             valid_time: init_time,
                             msg: err.to_string() + " in data load thread",
-                        }},
+                        },
                     },
                     message => message,
                 };
@@ -418,7 +417,8 @@ fn start_location_stats_thread(
                                     site,
                                     model,
                                     valid_time,
-                                    msg: "Missing location information in location stats thread".to_string(),
+                                    msg: "Missing location information in location stats thread"
+                                        .to_string(),
                                 };
                                 send_or_bail!(message, completed_notification);
                             }
